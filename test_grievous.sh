@@ -38,6 +38,5 @@ grievous-teleoperate \
     --teleop.id=$LEADER_ID \
     --teleop.left_arm_port=$LEADER_1_PORT \
     --teleop.right_arm_port=$LEADER_2_PORT \
-    --display_data=true \
     --remote_client_address=tcp://*:5555
 

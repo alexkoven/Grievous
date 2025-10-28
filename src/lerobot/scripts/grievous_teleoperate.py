@@ -26,7 +26,6 @@ grievous-teleoperate \
     --teleop.type=so101_leader \
     --teleop.port=/dev/tty.usbmodem58760431551 \
     --teleop.id=blue \
-    --display_data=true \
     --remote_client_address=tcp://*:5555
 ```
 
@@ -47,7 +46,6 @@ grievous-teleoperate \
   --teleop.left_arm_port=/dev/tty.usbmodem5A460828611 \
   --teleop.right_arm_port=/dev/tty.usbmodem5A460826981 \
   --teleop.id=bimanual_leader \
-  --display_data=true \
   --remote_client_address=tcp://*:5555
 ```
 
@@ -60,7 +58,6 @@ from dataclasses import asdict, dataclass
 from pprint import pformat
 from typing import Any
 
-import rerun as rr
 import zmq
 
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
@@ -107,8 +104,6 @@ class GrievousTeleoperateConfig:
     # Limit the maximum frames per second.
     fps: int = 60
     teleop_time_s: float | None = None
-    # Display all cameras on screen
-    display_data: bool = False
     # Remote client address for sending observations via ZMQ (e.g., "tcp://*:5555" or "tcp://0.0.0.0:5555")
     # Remote clients should connect to this address using a PULL socket to receive observations
     remote_client_address: str | None = None
@@ -121,7 +116,6 @@ def teleop_loop(
     teleop_action_processor: RobotProcessorPipeline[tuple[RobotAction, RobotObservation], RobotAction],
     robot_action_processor: RobotProcessorPipeline[tuple[RobotAction, RobotObservation], RobotAction],
     robot_observation_processor: RobotProcessorPipeline[RobotObservation, RobotObservation],
-    display_data: bool = False,
     duration: float | None = None,
     zmq_socket: Any | None = None,
 ):
@@ -135,7 +129,6 @@ def teleop_loop(
         teleop: The teleoperator device instance providing control actions.
         robot: The robot instance being controlled.
         fps: The target frequency for the control loop in frames per second.
-        display_data: If True, fetches robot observations and displays them in the console and Rerun.
         duration: The maximum duration of the teleoperation loop in seconds. If None, the loop runs indefinitely.
         teleop_action_processor: An optional pipeline to process raw actions from the teleoperator.
         robot_action_processor: An optional pipeline to process actions before they are sent to the robot.
@@ -177,25 +170,13 @@ def teleop_loop(
                     "timestamp": time.time(),
                 }
                 serialized = pickle.dumps(obs_data)
-                zmq_socket.send(serialized)
+                # Use non-blocking send to avoid stalling if no receiver is present
+                zmq_socket.send(serialized, zmq.NOBLOCK)
+            except zmq.Again:
+                # No receiver is available, continue without error
+                pass
             except Exception as e:
                 logging.warning(f"Failed to send observation via ZMQ: {e}")
-
-        if display_data:
-            # Process robot observation through pipeline
-            obs_transition = robot_observation_processor(obs)
-
-            log_rerun_data(
-                observation=obs_transition,
-                action=teleop_action,
-            )
-
-            print("\n" + "-" * (display_len + 10))
-            print(f"{'NAME':<{display_len}} | {'NORM':>7}")
-            # Display the final robot action that was sent
-            for motor, value in robot_action_to_send.items():
-                print(f"{motor:<{display_len}} | {value:>7.2f}")
-            move_cursor_up(len(robot_action_to_send) + 5)
 
         dt_s = time.perf_counter() - loop_start
         busy_wait(1 / fps - dt_s)
@@ -210,8 +191,6 @@ def teleop_loop(
 def grievous_teleoperate(cfg: GrievousTeleoperateConfig):
     init_logging()
     logging.info(pformat(asdict(cfg)))
-    if cfg.display_data:
-        init_rerun(session_name="teleoperation")
 
     teleop = make_teleoperator_from_config(cfg.teleop)
     robot = make_robot_from_config(cfg.robot)
@@ -237,7 +216,6 @@ def grievous_teleoperate(cfg: GrievousTeleoperateConfig):
             teleop=teleop,
             robot=robot,
             fps=cfg.fps,
-            display_data=cfg.display_data,
             duration=cfg.teleop_time_s,
             teleop_action_processor=teleop_action_processor,
             robot_action_processor=robot_action_processor,
@@ -247,8 +225,6 @@ def grievous_teleoperate(cfg: GrievousTeleoperateConfig):
     except KeyboardInterrupt:
         pass
     finally:
-        if cfg.display_data:
-            rr.rerun_shutdown()
         if zmq_socket:
             zmq_socket.close()
         if zmq_context:
