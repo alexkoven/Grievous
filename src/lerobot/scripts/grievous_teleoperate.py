@@ -60,8 +60,9 @@ from typing import Any
 
 import zmq
 
+from lerobot.cameras.configs import ColorMode, Cv2Rotation, CameraConfig
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
-from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig  # noqa: F401
+from lerobot.cameras.realsense import RealSenseCamera, RealSenseCameraConfig  # noqa: F401
 from lerobot.configs import parser
 from lerobot.processor import (
     RobotAction,
@@ -163,10 +164,24 @@ def teleop_loop(
         # Send observation to remote client via ZMQ if socket is provided
         if zmq_socket is not None:
             try:
-                # Serialize observation data
+                # Get camera data from robot
+                camera_data = {}
+                if hasattr(robot, 'cameras') and robot.cameras:
+                    for cam_name, camera in robot.cameras.items():
+                        if camera.is_connected:
+                            try:
+                                # Get the latest frame from camera
+                                frame = camera.get_frame()
+                                if frame is not None:
+                                    camera_data[cam_name] = frame
+                            except Exception as e:
+                                logging.debug(f"Failed to get frame from camera {cam_name}: {e}")
+                
+                # Serialize observation data including camera frames
                 obs_data = {
                     "observation": obs,
                     "action": robot_action_to_send,
+                    "camera_data": camera_data,
                     "timestamp": time.time(),
                 }
                 serialized = pickle.dumps(obs_data)
@@ -181,7 +196,6 @@ def teleop_loop(
         dt_s = time.perf_counter() - loop_start
         busy_wait(1 / fps - dt_s)
         loop_s = time.perf_counter() - loop_start
-        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
 
         if duration is not None and time.perf_counter() - start >= duration:
             return
