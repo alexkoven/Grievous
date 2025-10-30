@@ -141,10 +141,15 @@ class CameraReader:
                     frame = None;
                     frame = self.cam.async_read()
                     if frame is not None:
-                        with self.lock:
-                            self.latest_frame = frame
+                        frame = cv2.resize(frame, (512,512), interpolation=cv2.INTER_AREA)
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                        result, encframe = cv2.imencode('.jpg', frame, encode_param)
+                        if result:
+                            with self.lock:
+                                self.latest_frame = base64.b64encode(encframe).decode("utf-8")
                 except Exception as e:
                     logging.warning(f"[{self.name}] camera error: {e}")
+                time.sleep(0.005)
 
     def get_latest_frame(self):
         with self.lock:
@@ -217,6 +222,11 @@ def teleop_loop(
                     for cam_name, reader in camera_readers.items():
                         frame = reader.get_latest_frame()
                         if frame is not None:
+                            # frame = cv2.resize(frame, (512,512), interpolation=cv2.INTER_AREA)
+                            # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                            # result, encframe = cv2.imencode('.jpg', frame, encode_param)
+                            # if result:
+                            #     camera_data[cam_name] = base64.b64encode(encframe).decode("utf-8")
                             camera_data[cam_name] = frame
 
                 full_obs = obs | camera_data

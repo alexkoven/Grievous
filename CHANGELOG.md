@@ -54,5 +54,25 @@
 - Auto log data into a VLA compatible file
 - Make sure Rerun Data can be used for VLA training
 
+## [grievous-record] - 2025-10-30
+- **test_grievous.sh**
+  - Changed camera resolutions, webcams went from 640x480 to 640x360, Intellsense went from 1280x720 to 424x240
+  -
+
+- **grievous_teleoperate.py**
+  - Implemented image compression based on XleRobot to reduce recording size and network usage:
+  '''python
+  frame = cv2.resize(frame, (512,512), interpolation=cv2.INTER_AREA)
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+    result, encframe = cv2.imencode('.jpg', frame, encode_param)
+    if result:
+        camera_data[cam_name] = base64.b64encode(encframe).decode("utf-8")
+  '''
+
+- **grievous_viewer.py**
+  - Started to implement decoding:
+  '''python
+  
+  '''
 
 
