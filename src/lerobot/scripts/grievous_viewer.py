@@ -74,21 +74,15 @@ def grievous_viewer(cfg: GrievousViewerConfig):
             data = zmq_socket.recv()
             obs_data = pickle.loads(data)
             
-            # Extract observation, action, and camera data
+            # Extract observation and action
             obs = obs_data["observation"]
             action = obs_data["action"]
-            camera_data = obs_data.get("camera_data", {})
             
             # Get processors (using defaults from the teleoperate side)
             _, _, robot_observation_processor = make_default_processors()
             
             # Process observation
             obs_transition = robot_observation_processor(obs)
-            
-            # Add camera data to observation for Rerun visualization
-            if camera_data:
-                for cam_name, frame in camera_data.items():
-                    obs_transition[f"observation.image.{cam_name}"] = frame
             
             # Log to Rerun
             log_rerun_data(

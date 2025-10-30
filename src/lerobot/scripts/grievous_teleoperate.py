@@ -60,6 +60,7 @@ from dataclasses import asdict, dataclass
 from pprint import pformat
 from typing import Any
 
+from lerobot import cameras
 from lerobot.cameras import camera
 import zmq
 import cv2
@@ -117,8 +118,8 @@ class GrievousTeleoperateConfig:
     remote_client_address: str | None = None
 
 class CameraReader:
-    def __init__(self, camera, name=None):
-        self.camera = camera
+    def __init__(self, cam, name=None):
+        self.cam = cam
         self.name = name or "camera"
         self.latest_frame = None
         self.lock = threading.Lock()
@@ -129,32 +130,19 @@ class CameraReader:
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
-        logging.info(f"[{self.name}] camera thread started")
+        print(f"[{self.name}] camera thread started with {self.cam} camera")
 
     def _loop(self):
         frame_count = 0
         last_log = time.time()
         while self.running:
-            print("here")
-            if camera.is_connected:
+            if self.cam.is_connected:
                 try:
                     frame = None;
-                    frame = camera.get_frame()
+                    frame = self.cam.async_read()
                     if frame is not None:
                         with self.lock:
-                            ret, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 1])
-                            if ret:
-                                self.latest_frame = base64.b64encode(buffer).decode("utf-8")
-                            else:
-                                self.latest_frame = ""
-                            frame_count += 1
-
-                    print("here")
-
-                    if time.time() - last_log > 2:
-                        print(f"[{self.name}] captured {frame_count / (time.time() - last_log):.1f} FPS")
-                        frame_count = 0
-                        last_log = time.time()
+                            self.latest_frame = frame
                 except Exception as e:
                     logging.warning(f"[{self.name}] camera error: {e}")
 
@@ -167,54 +155,6 @@ class CameraReader:
         if self.thread is not None:
             self.thread.join(timeout=1.0)
             logging.info(f"[{self.name}] camera thread stopped")
-
-class ObservationReader:
-    def __init__(self, robot):
-        self.robot = robot
-        self.latest_obs = None
-        self.lock = threading.Lock()
-        self.running = False
-        self.thread = None
-        self.fps = 0.0
-
-    def start(self):
-        self.running = True
-        self.thread = threading.Thread(target=self._loop, daemon=True)
-        self.thread.start()
-        logging.info("[obs_thread] started")
-
-    def _loop(self):
-        count = 0
-        last_time = time.time()
-        while self.running:
-            try:
-                obs = self.robot.get_observation()
-                with self.lock:
-                    self.latest_obs = obs
-                count += 1
-
-                # report how fast we're polling
-                if time.time() - last_time > 2:
-                    self.fps = count / (time.time() - last_time)
-                    logging.info(f"[obs_thread] running at {self.fps:.1f} Hz")
-                    count = 0
-                    last_time = time.time()
-
-            except Exception as e:
-                logging.warning(f"[obs_thread] error: {e}")
-                time.sleep(0.05)  # backoff if errors
-
-    def get_latest_observation(self):
-        with self.lock:
-            return self.latest_obs
-
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=1)
-            logging.info("[obs_thread] stopped")
-
-
 
 def teleop_loop(
     teleop: Teleoperator,
@@ -278,14 +218,13 @@ def teleop_loop(
                         frame = reader.get_latest_frame()
                         if frame is not None:
                             camera_data[cam_name] = frame
-                            print("here")
 
+                full_obs = obs | camera_data
                 
                 # Serialize observation data including camera frames
                 obs_data = {
-                    "observation": obs,
+                    "observation": full_obs,
                     "action": robot_action_to_send,
-                    "camera_data": camera_data,
                     "timestamp": time.time(),
                 }
                 serialized = pickle.dumps(obs_data)
@@ -313,13 +252,6 @@ def grievous_teleoperate(cfg: GrievousTeleoperateConfig):
 
     teleop = make_teleoperator_from_config(cfg.teleop)
     robot = make_robot_from_config(cfg.robot)
-    camera_readers = {}
-    if hasattr(robot, "cameras") and robot.cameras:
-        for cam_name, cam in robot.cameras.items():
-            reader = CameraReader(cam, cam_name)
-            reader.start()
-            camera_readers[cam_name] = reader
-    # --- Start threaded camera capture --
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
@@ -337,6 +269,12 @@ def grievous_teleoperate(cfg: GrievousTeleoperateConfig):
 
     teleop.connect()
     robot.connect()
+    camera_readers = {}
+    if hasattr(robot, "cameras") and robot.cameras:
+        for cam_name, cam in robot.cameras.items():
+            reader = CameraReader(cam, cam_name)
+            reader.start()
+            camera_readers[cam_name] = reader
 
 
     try:

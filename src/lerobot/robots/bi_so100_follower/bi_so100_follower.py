@@ -130,11 +130,11 @@ class BiSO100Follower(Robot):
         right_obs = self.right_arm.get_observation()
         obs_dict.update({f"right_{key}": value for key, value in right_obs.items()})
 
-        for cam_key, cam in self.cameras.items():
-            start = time.perf_counter()
-            obs_dict[cam_key] = cam.async_read()
-            dt_ms = (time.perf_counter() - start) * 1e3
-            logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
+        # for cam_key, cam in self.cameras.items():
+        #     start = time.perf_counter()
+        #     obs_dict[cam_key] = cam.async_read()
+        #     dt_ms = (time.perf_counter() - start) * 1e3
+        #     logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
 
         return obs_dict
 
