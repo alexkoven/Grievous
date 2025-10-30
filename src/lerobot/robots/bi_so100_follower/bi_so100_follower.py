@@ -16,6 +16,8 @@
 
 import logging
 import time
+import cv2
+import base64
 from functools import cached_property
 from typing import Any
 
