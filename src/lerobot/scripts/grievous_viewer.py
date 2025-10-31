@@ -29,9 +29,13 @@ the robot observations in Rerun.
 import logging
 import pickle
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 
 import zmq
+import numpy as np
+import base64
+import cv2
 
 import rerun as rr
 
@@ -51,7 +55,22 @@ class GrievousViewerConfig:
     remote_server_address: str
     # Name for the rerun session
     session_name: str = "grievous_remote_viewer"
+    cam_list: list = field(default_factory=lambda: ["head","left_wrist","right_wrist"])
 
+def _decode_image_from_b64(self, image_b64: str) -> Optional[np.ndarray]:
+        """Decodes a base64 encoded image string to an OpenCV image."""
+        if not image_b64:
+            return None
+        try:
+            jpg_data = base64.b64decode(image_b64)
+            np_arr = np.frombuffer(jpg_data, dtype=np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                logging.warning("cv2.imdecode returned None for an image.")
+            return frame
+        except (TypeError, ValueError) as e:
+            logging.error(f"Error decoding base64 image data: {e}")
+            return None
 
 @parser.wrap()
 def grievous_viewer(cfg: GrievousViewerConfig):
@@ -77,7 +96,13 @@ def grievous_viewer(cfg: GrievousViewerConfig):
             # Extract observation and action
             obs = obs_data["observation"]
             action = obs_data["action"]
-            
+
+            for cam_name, image in obs.items:
+                if cam_name not in cfg.cam_list:
+                    continue
+                frame = _decode_image_from_b64(image)
+                obs[cam_name] = frame
+
             # Get processors (using defaults from the teleoperate side)
             _, _, robot_observation_processor = make_default_processors()
             
