@@ -1,3 +1,4 @@
+# COPIED: Copyright header from lerobot scripts
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# NEW: Docstring for remote viewer functionality
 """
 Simple remote viewer for grievous_teleoperate observations via ZMQ.
 
@@ -26,19 +28,23 @@ the robot observations in Rerun.
 
 """
 
+# COPIED: Standard imports from lerobot scripts
 import logging
 import pickle
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+# NEW: ZMQ and image processing imports
 import zmq
 import numpy as np
 import base64
 import cv2
 
+# COPIED: Rerun import from lerobot_teleoperate.py
 import rerun as rr
 
+# COPIED: Config and processor imports from lerobot scripts
 from lerobot.configs import parser
 from lerobot.processor import (
     RobotObservation,
@@ -49,6 +55,7 @@ from lerobot.utils.utils import init_logging
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 
+# NEW: Configuration dataclass for viewer
 @dataclass
 class GrievousViewerConfig:
     # Remote server address to connect to (e.g., "tcp://192.168.1.100:5555")
@@ -57,29 +64,35 @@ class GrievousViewerConfig:
     session_name: str = "grievous_remote_viewer"
     cam_list: list = field(default_factory=lambda: ["head","left_wrist","right_wrist"])
 
-def _decode_image_from_b64(self, image_b64: str) -> Optional[np.ndarray]:
-        """Decodes a base64 encoded image string to an OpenCV image."""
-        if not image_b64:
-            return None
-        try:
-            jpg_data = base64.b64decode(image_b64)
-            np_arr = np.frombuffer(jpg_data, dtype=np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is None:
-                logging.warning("cv2.imdecode returned None for an image.")
-            return frame
-        except (TypeError, ValueError) as e:
-            logging.error(f"Error decoding base64 image data: {e}")
-            return None
+# COPIED: Image decoding function from xlerobot_client.py (lines 186-199)
+# FIXED: Removed 'self' parameter as this is not a class method
+def _decode_image_from_b64(image_b64: str) -> Optional[np.ndarray]:
+    """Decodes a base64 encoded image string to an OpenCV image."""
+    if not image_b64:
+        return None
+    try:
+        jpg_data = base64.b64decode(image_b64)
+        np_arr = np.frombuffer(jpg_data, dtype=np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if frame is None:
+            logging.warning("cv2.imdecode returned None for an image.")
+        return frame
+    except (TypeError, ValueError) as e:
+        logging.error(f"Error decoding base64 image data: {e}")
+        return None
 
+# NEW: Main viewer function with ZMQ client and Rerun visualization
 @parser.wrap()
 def grievous_viewer(cfg: GrievousViewerConfig):
+    # COPIED: Logging initialization from lerobot scripts
     init_logging()
     logging.info(f"Connecting to {cfg.remote_server_address}")
     
+    # COPIED: Rerun initialization from lerobot_teleoperate.py (lines 188-189)
     # Initialize Rerun
     init_rerun(session_name=cfg.session_name)
     
+    # COPIED: ZMQ connection pattern from xlerobot_client.py (lines 128-137)
     # Set up ZMQ connection
     zmq_context = zmq.Context()
     zmq_socket = zmq_context.socket(zmq.PULL)
@@ -87,6 +100,7 @@ def grievous_viewer(cfg: GrievousViewerConfig):
     
     logging.info("Connected! Receiving observations... Press Ctrl+C to stop.")
     
+    # NEW: Main receive and display loop
     try:
         while True:
             # Receive observation data
@@ -97,24 +111,29 @@ def grievous_viewer(cfg: GrievousViewerConfig):
             obs = obs_data["observation"]
             action = obs_data["action"]
 
-            for cam_name, image in obs.items:
+            # NEW: Decode base64 images for specified cameras
+            # FIXED: Added parentheses to obs.items() and corrected function call
+            for cam_name, image in obs.items():
                 if cam_name not in cfg.cam_list:
                     continue
                 frame = _decode_image_from_b64(image)
                 obs[cam_name] = frame
 
+            # COPIED: Processor usage from lerobot scripts
             # Get processors (using defaults from the teleoperate side)
             _, _, robot_observation_processor = make_default_processors()
             
             # Process observation
             obs_transition = robot_observation_processor(obs)
             
+            # COPIED: Rerun logging from lerobot_teleoperate.py (lines 163-166)
             # Log to Rerun
             log_rerun_data(
                 observation=obs_transition,
                 action=action,
             )
             
+            # NEW: Timestamp printing
             # Print timestamp
             timestamp = obs_data.get("timestamp", time.time())
             print(f"\rReceived observation at {time.ctime(timestamp)}", end="")
@@ -124,11 +143,13 @@ def grievous_viewer(cfg: GrievousViewerConfig):
     except Exception as e:
         logging.error(f"Error receiving data: {e}")
     finally:
+        # NEW: Cleanup ZMQ and Rerun resources
         zmq_socket.close()
         zmq_context.term()
         rr.rerun_shutdown()
 
 
+# COPIED: main() entry point pattern from lerobot scripts
 def main():
     grievous_viewer()
 
