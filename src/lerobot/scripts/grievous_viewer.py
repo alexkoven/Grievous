@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NEW: Docstring for remote viewer functionality
 """
 Simple remote viewer for grievous_teleoperate observations via ZMQ.
 
@@ -35,7 +34,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-# NEW: ZMQ and image processing imports
 import zmq
 import numpy as np
 import base64
@@ -55,7 +53,6 @@ from lerobot.utils.utils import init_logging
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 
-# NEW: Configuration dataclass for viewer
 @dataclass
 class GrievousViewerConfig:
     # Remote server address to connect to (e.g., "tcp://192.168.1.100:5555")

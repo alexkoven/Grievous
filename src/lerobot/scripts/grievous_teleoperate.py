@@ -52,7 +52,6 @@ grievous-teleoperate \
 
 """
 
-# NEW: Additional imports for JSON, pickle, ZMQ, camera handling, and threading
 from json import JSONDecodeError
 import json
 import logging
@@ -62,19 +61,14 @@ from dataclasses import asdict, dataclass
 from pprint import pformat
 from typing import Any
 
-# NEW: Imports for camera handling
 from lerobot import cameras
 from lerobot.cameras import camera
-# NEW: Imports for ZMQ communication
 import zmq
-# NEW: Imports for image encoding
 import cv2
 import base64
 
-# NEW: Import for threading camera readers
 import threading
 
-# NEW: Additional camera configuration imports
 from lerobot.cameras.configs import ColorMode, Cv2Rotation, CameraConfig
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.realsense import RealSenseCamera, RealSenseCameraConfig  # noqa: F401
