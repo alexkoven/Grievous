@@ -80,7 +80,7 @@ from lerobot.configs import parser
 from lerobot.datasets.image_writer import safe_stop_image_writer
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
-from lerobot.datasets.utils import build_dataset_frame, combine_feature_dicts
+from lerobot.datasets.utils import build_dataset_frame, combine_feature_dicts, INFO_PATH
 from lerobot.datasets.video_utils import VideoEncodingManager
 from lerobot.processor import (
     RobotAction,
@@ -108,7 +108,7 @@ from lerobot.teleoperators import (  # noqa: F401
     so100_leader,
     so101_leader,
 )
-from lerobot.utils.constants import ACTION, OBS_STR
+from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_STR
 from lerobot.utils.control_utils import (
     init_keyboard_listener,
     is_headless,
@@ -143,7 +143,7 @@ class DatasetRecordConfig:
     # Encode frames in the dataset into video
     video: bool = True
     # Upload dataset to Hugging Face hub.
-    push_to_hub: bool = True
+    push_to_hub: bool = False
     # Upload on private repository on the Hugging Face hub.
     private: bool = False
     # Add tags to your dataset on the hub.
@@ -386,8 +386,12 @@ def record_loop(
             except Exception as e:
                 logging.warning(f"Failed to send observation via ZMQ: {e}")
 
-        if display_data:
-            log_rerun_data(observation=obs_processed, action=action_values)
+        if display_data and not is_headless():
+            try:
+                log_rerun_data(observation=obs_processed, action=action_values)
+            except Exception as e:
+                # Silently fail in headless environments or if rerun fails
+                pass
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
@@ -399,8 +403,17 @@ def record_loop(
 def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
     init_logging()
     logging.info(pformat(asdict(cfg)))
-    if cfg.display_data:
-        init_rerun(session_name="recording")
+    
+    # Only initialize Rerun if display_data is True and not in headless environment
+    if cfg.display_data and not is_headless():
+        try:
+            init_rerun(session_name="recording")
+        except Exception as e:
+            logging.warning(f"Failed to initialize Rerun (may be headless): {e}. Continuing without visualization.")
+            cfg.display_data = False
+    elif cfg.display_data and is_headless():
+        logging.warning("Display data requested but running in headless environment. Disabling visualization.")
+        cfg.display_data = False
 
     robot = make_robot_from_config(cfg.robot)
     teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
@@ -421,6 +434,14 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
             use_videos=cfg.dataset.video,
         ),
     )
+
+    # Check if dataset directory already exists and has a valid info.json file
+    # If so, automatically switch to resume mode
+    dataset_root = Path(cfg.dataset.root) if cfg.dataset.root else HF_LEROBOT_HOME / cfg.dataset.repo_id
+    info_path = dataset_root / INFO_PATH
+    if not cfg.resume and info_path.exists():
+        logging.info(f"Dataset directory already exists at {dataset_root} with info.json. Automatically switching to resume mode.")
+        cfg.resume = True
 
     if cfg.resume:
         dataset = LeRobotDataset(
