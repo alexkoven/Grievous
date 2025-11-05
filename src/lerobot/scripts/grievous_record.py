@@ -60,8 +60,11 @@ grievous-record \
 import json
 import logging
 import pickle
+import shutil
+import tempfile
 import time
 import threading
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from pprint import pformat
@@ -124,6 +127,26 @@ from lerobot.utils.utils import (
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 
+def safe_log_say(text: str, play_sounds: bool = True, blocking: bool = False):
+    """
+    Wrapper around log_say that gracefully handles missing text-to-speech commands.
+    
+    Args:
+        text: Text to log and optionally speak
+        play_sounds: Whether to attempt text-to-speech
+        blocking: Whether to block until speech completes
+    """
+    try:
+        log_say(text, play_sounds, blocking)
+    except FileNotFoundError:
+        # Text-to-speech command not available (e.g., spd-say), just log
+        logging.info(text)
+    except Exception as e:
+        # Other errors with text-to-speech, log warning but continue
+        logging.warning(f"Failed to use text-to-speech: {e}. Logging text instead.")
+        logging.info(text)
+
+
 @dataclass
 class DatasetRecordConfig:
     # Dataset identifier. By convention it should match '{hf_username}/{dataset_name}' (e.g. `lerobot/test`).
@@ -135,7 +158,7 @@ class DatasetRecordConfig:
     # Limit the frames per second.
     fps: int = 30
     # Number of seconds for data recording for each episode.
-    episode_time_s: int | float = 60
+    episode_time_s: int | float = 10
     # Number of seconds for resetting the environment after each episode.
     reset_time_s: int | float = 60
     # Number of episodes to record.
@@ -143,7 +166,7 @@ class DatasetRecordConfig:
     # Encode frames in the dataset into video
     video: bool = True
     # Upload dataset to Hugging Face hub.
-    push_to_hub: bool = False
+    push_to_hub: bool = True
     # Upload on private repository on the Hugging Face hub.
     private: bool = False
     # Add tags to your dataset on the hub.
@@ -177,13 +200,14 @@ class GrievousRecordConfig:
     # Display all cameras on screen
     display_data: bool = False
     # Use vocal synthesis to read events.
-    play_sounds: bool = True
+    play_sounds: bool = False
     # Resume recording on an existing dataset.
     resume: bool = False
     # Remote client address for sending observations via ZMQ (e.g., "tcp://*:5555" or "tcp://0.0.0.0:5555")
     # Remote clients should connect to this address using a PULL socket to receive observations
     remote_client_address: str | None = None
     # Whether to save dataset locally. If False, only sends dataset frames over ZMQ for remote recording.
+    # If True, saves locally and can push to Hugging Face Hub.
     save_locally: bool = False
 
     def __post_init__(self):
@@ -217,13 +241,15 @@ class CameraReader:
                 try:
                     frame = self.cam.read()
                     if frame is not None:
-                        # Image encoding pattern from xlerobot_host.py and lekiwi_host.py
-                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
-                        result, encframe = cv2.imencode('.jpg', frame, encode_param)
-                        if result:
-                            with self.lock:
-                                # Increases the filesize by 33%, but can be sent in JSON
-                                self.latest_frame = base64.b64encode(encframe).decode("utf-8")
+                        # # Image encoding pattern from xlerobot_host.py and lekiwi_host.py
+                        # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                        # result, encframe = cv2.imencode('.jpg', frame, encode_param)
+                        # if result:
+                        #     with self.lock:
+                        #         # Increases the filesize by 33%, but can be sent in JSON
+                        #         self.latest_frame = base64.b64encode(encframe).decode("utf-8")
+                        with self.lock:
+                            self.latest_frame = frame
                 except Exception as e:
                     logging.warning(f"[{self.name}] camera error: {e}")
                 time.sleep(0.005)
@@ -379,7 +405,7 @@ def record_loop(
                 # Use pickle for binary serialization (more efficient than JSON for numpy arrays)
                 serialized = pickle.dumps(obs_data)
                 # Non-blocking send to avoid stalling if no receiver is present
-                zmq_socket.send(serialized, zmq.NOBLOCK)
+                zmq_socket.send(serialized)
             except zmq.Again:
                 # No receiver is available, continue without error
                 pass
@@ -435,44 +461,71 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
         ),
     )
 
-    # Check if dataset directory already exists and has a valid info.json file
-    # If so, automatically switch to resume mode
-    dataset_root = Path(cfg.dataset.root) if cfg.dataset.root else HF_LEROBOT_HOME / cfg.dataset.repo_id
-    info_path = dataset_root / INFO_PATH
-    if not cfg.resume and info_path.exists():
-        logging.info(f"Dataset directory already exists at {dataset_root} with info.json. Automatically switching to resume mode.")
-        cfg.resume = True
+    # Dataset handling: only create if saving locally, otherwise use minimal structure for ZMQ streaming
+    dataset = None
+    if cfg.save_locally:
+        # Check if dataset directory already exists and has a valid info.json file
+        # If so, automatically switch to resume mode
+        dataset_root = Path(cfg.dataset.root) if cfg.dataset.root else HF_LEROBOT_HOME / cfg.dataset.repo_id
+        info_path = dataset_root / INFO_PATH
+        if not cfg.resume and info_path.exists():
+            logging.info(f"Dataset directory already exists at {dataset_root} with info.json. Automatically switching to resume mode.")
+            cfg.resume = True
 
-    if cfg.resume:
-        dataset = LeRobotDataset(
-            cfg.dataset.repo_id,
-            root=cfg.dataset.root,
-            batch_encoding_size=cfg.dataset.video_encoding_batch_size,
-        )
-
-        # Only start image writer if saving locally
-        if cfg.save_locally and hasattr(robot, "cameras") and len(robot.cameras) > 0:
-            dataset.start_image_writer(
-                num_processes=cfg.dataset.num_image_writer_processes,
-                num_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
+        if cfg.resume:
+            dataset = LeRobotDataset(
+                cfg.dataset.repo_id,
+                root=cfg.dataset.root,
+                batch_encoding_size=cfg.dataset.video_encoding_batch_size,
             )
-        sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
-    else:
-        # Create empty dataset or load existing saved episodes
-        # Dataset is always created (even if not saving locally) to get features for building dataset_frame
-        sanity_check_dataset_name(cfg.dataset.repo_id, None)
-        dataset = LeRobotDataset.create(
-            cfg.dataset.repo_id,
-            cfg.dataset.fps,
-            root=cfg.dataset.root,
-            robot_type=robot.name,
-            features=dataset_features,
-            use_videos=cfg.dataset.video,
+
             # Only start image writer if saving locally
-            image_writer_processes=cfg.dataset.num_image_writer_processes if cfg.save_locally else 0,
-            image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras) if cfg.save_locally else 0,
-            batch_encoding_size=cfg.dataset.video_encoding_batch_size,
-        )
+            if hasattr(robot, "cameras") and len(robot.cameras) > 0:
+                dataset.start_image_writer(
+                    num_processes=cfg.dataset.num_image_writer_processes,
+                    num_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
+                )
+            sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
+        else:
+            # Create empty dataset for local saving
+            sanity_check_dataset_name(cfg.dataset.repo_id, None)
+            dataset = LeRobotDataset.create(
+                cfg.dataset.repo_id,
+                cfg.dataset.fps,
+                root=cfg.dataset.root,
+                robot_type=robot.name,
+                features=dataset_features,
+                use_videos=cfg.dataset.video,
+                image_writer_processes=cfg.dataset.num_image_writer_processes,
+                image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
+                batch_encoding_size=cfg.dataset.video_encoding_batch_size,
+            )
+        logging.info(f"Dataset created locally at: {dataset.root}")
+    else:
+        # Not saving locally - only streaming over ZMQ
+        # Create a minimal dataset object in memory (using temp directory) just for building frames
+        if cfg.remote_client_address:
+            temp_root = Path(tempfile.mkdtemp(prefix="grievous_stream_"))
+            logging.info(f"Streaming mode: Not saving locally, only streaming over ZMQ to {cfg.remote_client_address}")
+            logging.info(f"Using temporary dataset structure at: {temp_root} (will be cleaned up)")
+            try:
+                dataset = LeRobotDataset.create(
+                    cfg.dataset.repo_id,
+                    cfg.dataset.fps,
+                    root=temp_root,
+                    robot_type=robot.name,
+                    features=dataset_features,
+                    use_videos=cfg.dataset.video,
+                    image_writer_processes=0,  # No image writing when streaming
+                    image_writer_threads=0,
+                    batch_encoding_size=cfg.dataset.video_encoding_batch_size,
+                )
+                logging.info("Temporary dataset structure created for frame building (ZMQ streaming only)")
+            except Exception as e:
+                logging.warning(f"Failed to create temporary dataset structure: {e}. Will send raw observations over ZMQ.")
+                dataset = None
+        else:
+            logging.warning("save_locally=False but no remote_client_address specified. No data will be saved or streamed!")
 
     # NEW: ZMQ socket setup (similar pattern to grievous_teleoperate.py)
     zmq_context = None
@@ -500,10 +553,12 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
 
     listener, events = init_keyboard_listener()
 
-    with VideoEncodingManager(dataset):
+    # Only use VideoEncodingManager if saving locally
+    video_manager = VideoEncodingManager(dataset) if cfg.save_locally else nullcontext()
+    with video_manager:
         recorded_episodes = 0
         while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
-            log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
+            safe_log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
             record_loop(
                 robot=robot,
                 events=events,
@@ -526,7 +581,7 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
             if not events["stop_recording"] and (
                 (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
             ):
-                log_say("Reset the environment", cfg.play_sounds)
+                safe_log_say("Reset the environment", cfg.play_sounds)
                 record_loop(
                     robot=robot,
                     events=events,
@@ -545,7 +600,7 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
                 )
 
             if events["rerecord_episode"]:
-                log_say("Re-record episode", cfg.play_sounds)
+                safe_log_say("Re-record episode", cfg.play_sounds)
                 events["rerecord_episode"] = False
                 events["exit_early"] = False
                 if cfg.save_locally and dataset is not None:
@@ -557,7 +612,7 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
                 dataset.save_episode()
             recorded_episodes += 1
 
-    log_say("Stop recording", cfg.play_sounds, blocking=True)
+    safe_log_say("Stop recording", cfg.play_sounds, blocking=True)
 
     # NEW: Camera reader cleanup
     for reader in camera_readers.values():
@@ -576,11 +631,21 @@ def grievous_record(cfg: GrievousRecordConfig) -> LeRobotDataset:
     if not is_headless() and listener is not None:
         listener.stop()
 
+    # Cleanup temporary dataset directory if streaming only
+    if not cfg.save_locally and dataset is not None:
+        temp_root = dataset.root
+        if temp_root and "grievous_stream_" in str(temp_root):
+            try:
+                logging.info(f"Cleaning up temporary dataset directory: {temp_root}")
+                shutil.rmtree(temp_root, ignore_errors=True)
+            except Exception as e:
+                logging.warning(f"Failed to cleanup temporary directory {temp_root}: {e}")
+
     # Only push to hub if saving locally
     if cfg.save_locally and cfg.dataset.push_to_hub and dataset is not None:
         dataset.push_to_hub(tags=cfg.dataset.tags, private=cfg.dataset.private)
 
-    log_say("Exiting", cfg.play_sounds)
+    safe_log_say("Exiting", cfg.play_sounds)
     return dataset
 
 

@@ -145,8 +145,8 @@ case $choice in
         --teleop.left_arm_port=$LEADER_1_PORT \
         --teleop.right_arm_port=$LEADER_2_PORT \
         --teleop.id=$LEADER_ID \
-        --dataset.repo_id=jack/test_record \
-        --dataset.num_episodes=25 \
+        --dataset.repo_id=InternetSandwich33/test_record \
+        --dataset.num_episodes=1 \
         --dataset.single_task="Test if recording works" \
         --remote_client_address=tcp://*:5555
         ;;

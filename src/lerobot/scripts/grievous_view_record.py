@@ -104,6 +104,8 @@ class DatasetRecordConfig:
     # Number of episodes to record before batch encoding videos
     # Set to 1 for immediate encoding (default behavior), or higher for batched encoding
     video_encoding_batch_size: int = 1
+    # Display all cameras on screen
+    display_data: bool = False
 
     def __post_init__(self):
         if self.single_task is None:
@@ -149,9 +151,11 @@ def record_viewer_loop(
     cfg: GrievousViewRecordConfig,
     robot_observation_processor: RobotProcessorPipeline[RobotObservation, RobotObservation],
     events: dict,
+    control_time_s: float | None = None,
 ):
     """
     Main loop that receives observations via ZMQ, displays them in Rerun, and records to dataset.
+    Similar to lerobot_record.py's record_loop but receives data over ZMQ instead of directly from robot.
     
     Args:
         zmq_socket: ZMQ socket connected to the remote server
@@ -159,112 +163,68 @@ def record_viewer_loop(
         cfg: Configuration for the viewer/recorder
         robot_observation_processor: Processor for robot observations
         events: Keyboard events dictionary for controlling recording
+        control_time_s: Duration to record for this episode (None = use cfg.dataset.episode_time_s)
     """
-    recorded_episodes = 0
-    episode_start_time = time.perf_counter()
-    last_features_check = None
-    dataset_features = None
-    dataset_fps = None
+    if control_time_s is None:
+        control_time_s = cfg.dataset.episode_time_s
     
-    try:
-        while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
-            # Receive observation data (using pickle as in grievous_record.py)
+    timestamp = 0
+    start_episode_t = time.perf_counter()
+    
+    while timestamp < control_time_s:
+        start_loop_t = time.perf_counter()
+        
+        if events["exit_early"]:
+            events["exit_early"] = False
+            break
+        
+        # Receive observation data (using pickle as in grievous_record.py)
+        try:
+            data = zmq_socket.recv(zmq.NOBLOCK)
+            obs_data = pickle.loads(data)
+        except zmq.Again:
+            # No data available yet, wait a bit and continue
+            time.sleep(0.001)
+            timestamp = time.perf_counter() - start_episode_t
+            continue
+        
+        # Extract observation and action
+        obs = obs_data.get("observation", {})
+        action = obs_data.get("action", {})
+        frame_timestamp = obs_data.get("timestamp", time.time())
+        
+        # Extract dataset frame (already properly formatted from server)
+        dataset_frame = obs_data.get("dataset_frame")
+        if dataset_frame is not None:
+            # Add frame to dataset (same as lerobot_record.py line 361)
             try:
-                data = zmq_socket.recv(zmq.NOBLOCK)
-                obs_data = pickle.loads(data)
-            except zmq.Again:
-                # No data available yet, continue
-                time.sleep(0.001)
-                continue
-            
-            # Extract observation and action
-            obs = obs_data.get("observation", {})
-            action = obs_data.get("action", {})
-            timestamp = obs_data.get("timestamp", time.time())
-            
-            # NEW: Extract dataset frame and metadata if available
-            dataset_frame = obs_data.get("dataset_frame")
-            if dataset_frame is not None:
-                # Get dataset features and fps from first message if not already set
-                if dataset_features is None:
-                    dataset_features = obs_data.get("dataset_features")
-                    dataset_fps = obs_data.get("dataset_fps")
-                    if dataset_features is not None and dataset_fps is not None:
-                        logging.info(f"Received dataset features and fps={dataset_fps} from remote server")
-                        # Update dataset features if they don't match
-                        if dataset.features != dataset_features:
-                            logging.warning(f"Dataset features mismatch! Expected {dataset.features}, got {dataset_features}")
-                
-                # Add frame to dataset
-                try:
-                    dataset.add_frame(dataset_frame)
-                except Exception as e:
-                    logging.error(f"Failed to add frame to dataset: {e}")
-            
-            # NEW: Decode base64 images for specified cameras (for display only)
-            # The dataset_frame already has numpy arrays, so we only decode for display
-            display_obs = obs.copy()
-            for cam_name, image in obs.items():
-                if cam_name in cfg.cam_list and isinstance(image, str):
-                    # Only decode if it's a base64 string (for display)
-                    frame = _decode_image_from_b64(image)
-                    if frame is not None:
-                        display_obs[cam_name] = frame
-            
-            # COPIED: Processor usage from lerobot scripts
-            # Process observation for display
-            obs_transition = robot_observation_processor(display_obs)
-            
-            # COPIED: Rerun logging from lerobot_teleoperate.py (lines 163-166)
-            # Log to Rerun
-            log_rerun_data(
-                observation=obs_transition,
-                action=action,
-            )
-            
-            # NEW: Check if episode should end
-            elapsed_time = time.perf_counter() - episode_start_time
-            if elapsed_time >= cfg.dataset.episode_time_s:
-                # Save episode
-                dataset.save_episode()
-                recorded_episodes += 1
-                log_say(f"Saved episode {recorded_episodes}/{cfg.dataset.num_episodes}", cfg.play_sounds)
-                
-                # Reset for next episode (unless it's the last one)
-                if recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
-                    log_say("Reset the environment", cfg.play_sounds)
-                    # Wait for reset period
-                    reset_start = time.perf_counter()
-                    while time.perf_counter() - reset_start < cfg.dataset.reset_time_s:
-                        # Continue receiving and displaying during reset (but don't record)
-                        try:
-                            data = zmq_socket.recv(zmq.NOBLOCK)
-                            obs_data = pickle.loads(data)
-                            display_obs = obs_data.get("observation", {})
-                            action = obs_data.get("action", {})
-                            # Decode images for display
-                            for cam_name, image in display_obs.items():
-                                if cam_name in cfg.cam_list and isinstance(image, str):
-                                    frame = _decode_image_from_b64(image)
-                                    if frame is not None:
-                                        display_obs[cam_name] = frame
-                            obs_transition = robot_observation_processor(display_obs)
-                            log_rerun_data(observation=obs_transition, action=action)
-                        except zmq.Again:
-                            pass
-                        time.sleep(0.01)
-                
-                # Start new episode
-                episode_start_time = time.perf_counter()
-            
-            # NEW: Timestamp printing
-            print(f"\rReceived observation at {time.ctime(timestamp)} | Episode {recorded_episodes + 1}, elapsed: {elapsed_time:.1f}s", end="")
-            
-    except KeyboardInterrupt:
-        logging.info("\nStopping viewer/recorder...")
-    except Exception as e:
-        logging.error(f"Error receiving data: {e}")
-        raise
+                dataset.add_frame(dataset_frame)
+            except Exception as e:
+                logging.error(f"Failed to add frame to dataset: {e}")
+        
+        # Decode base64 images for specified cameras (for display only)
+        # The dataset_frame already has numpy arrays, so we only decode for display
+        display_obs = obs.copy()
+        for cam_name, image in obs.items():
+            if cam_name in cfg.cam_list and isinstance(image, str):
+                # Only decode if it's a base64 string (for display)
+                frame = _decode_image_from_b64(image)
+                if frame is not None:
+                    display_obs[cam_name] = frame
+        
+        # Process observation for display (same as lerobot_record.py)
+        obs_processed = robot_observation_processor(display_obs)
+        
+        # Log to Rerun (same as lerobot_record.py line 364)
+        # Rerun is always initialized in grievous_view_record, so always log
+        log_rerun_data(observation=obs_processed, action=action)
+        
+        dt_s = time.perf_counter() - start_loop_t
+        # Wait to maintain FPS (similar to lerobot_record.py but we're receiving not generating)
+        # Use a small sleep to avoid busy-waiting
+        time.sleep(max(0, 1.0 / dataset.fps - dt_s))
+        
+        timestamp = time.perf_counter() - start_episode_t
 
 
 # NEW: Main viewer/recorder function with ZMQ client, Rerun visualization, and dataset recording
@@ -339,37 +299,90 @@ def grievous_view_record(cfg: GrievousViewRecordConfig):
     if dataset is None:
         raise ValueError("Failed to create dataset. Make sure the remote server is sending dataset_features.")
     
-    # NEW: Initialize keyboard listener for recording control
+    # Initialize keyboard listener for recording control (same as lerobot_record.py)
     listener, events = init_keyboard_listener()
     
-    # NEW: Main recording/viewing loop with VideoEncodingManager
+    # Main recording/viewing loop with VideoEncodingManager (same as lerobot_record.py)
     with VideoEncodingManager(dataset):
-        try:
+        recorded_episodes = 0
+        while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
+            log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
             record_viewer_loop(
                 zmq_socket=zmq_socket,
                 dataset=dataset,
                 cfg=cfg,
                 robot_observation_processor=robot_observation_processor,
                 events=events,
+                control_time_s=cfg.dataset.episode_time_s,
             )
-        except KeyboardInterrupt:
-            logging.info("\nStopping viewer/recorder...")
-        finally:
-            # Save any remaining frames in the episode buffer
+            
+            # Execute reset period without recording (same as lerobot_record.py)
+            # Skip reset for the last episode to be recorded
+            if not events["stop_recording"] and (
+                (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
+            ):
+                log_say("Reset the environment", cfg.play_sounds)
+                record_viewer_loop(
+                    zmq_socket=zmq_socket,
+                    dataset=dataset,
+                    cfg=cfg,
+                    robot_observation_processor=robot_observation_processor,
+                    events=events,
+                    control_time_s=cfg.dataset.reset_time_s,
+                )
+            
+            if events["rerecord_episode"]:
+                log_say("Re-record episode", cfg.play_sounds)
+                events["rerecord_episode"] = False
+                events["exit_early"] = False
+                if dataset is not None:
+                    dataset.clear_episode_buffer()
+                continue
+            
+            # Save episode (same as lerobot_record.py line 495)
             if dataset is not None:
                 dataset.save_episode()
-                log_say("Stop recording", cfg.play_sounds, blocking=True)
+            recorded_episodes += 1
     
-    # Cleanup
+    log_say("Stop recording", cfg.play_sounds, blocking=True)
+    
+    # Cleanup (same as lerobot_record.py)
     if not is_headless() and listener is not None:
         listener.stop()
     
+    # Push to hub (same as lerobot_record.py line 507-508)
     if cfg.dataset.push_to_hub and dataset is not None:
-        dataset.push_to_hub(tags=cfg.dataset.tags, private=cfg.dataset.private)
+        try:
+            logging.info(f"Pushing dataset to Hugging Face Hub: {cfg.dataset.repo_id}")
+            dataset.push_to_hub(tags=cfg.dataset.tags, private=cfg.dataset.private)
+            logging.info(f"Successfully pushed dataset to Hugging Face Hub: https://huggingface.co/datasets/{cfg.dataset.repo_id}")
+        except Exception as e:
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg or "authentication" in error_msg.lower():
+                logging.error(
+                    "Failed to push dataset to Hugging Face Hub: Authentication required.\n"
+                    "To fix this, you need to authenticate with Hugging Face:\n"
+                    "  1. Get your write token from: https://huggingface.co/settings/tokens\n"
+                    "  2. Run: huggingface-cli login --token YOUR_TOKEN\n"
+                    "     Or: huggingface-cli login (to login interactively)\n"
+                    f"Your dataset is saved locally at: {dataset.root}\n"
+                    "You can push it manually later using: dataset.push_to_hub()"
+                )
+            elif "403" in error_msg or "Forbidden" in error_msg:
+                logging.error(
+                    f"403 Forbidden: Permission denied for repository '{cfg.dataset.repo_id}'.\n"
+                    "Check that:\n"
+                    "  1. Your token has write permissions\n"
+                    "  2. The repo_id username matches your authenticated username\n"
+                    f"Your dataset is saved locally at: {dataset.root}"
+                )
+            else:
+                logging.error(f"Failed to push dataset to Hugging Face Hub: {e}")
+                logging.info(f"Your dataset is saved locally at: {dataset.root}")
     
     log_say("Exiting", cfg.play_sounds)
     
-    # NEW: Cleanup ZMQ and Rerun resources
+    # Cleanup ZMQ and Rerun resources
     zmq_socket.close()
     zmq_context.term()
     rr.rerun_shutdown()
