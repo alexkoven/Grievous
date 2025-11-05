@@ -150,7 +150,8 @@ class CameraReader:
             if self.cam.is_connected:
                 try:
                     frame = None;
-                    frame = self.cam.async_read()
+                    frame = self.cam.read()
+                    frame = frame.shape
                     if frame is not None:
                         frame = cv2.resize(frame, (512,512), interpolation=cv2.INTER_AREA)
                         # COPIED: Image encoding pattern from xlerobot_host.py (lines 93-101) and lekiwi_host.py (lines 102-110)
@@ -158,6 +159,7 @@ class CameraReader:
                         result, encframe = cv2.imencode('.jpg', frame, encode_param)
                         if result:
                             with self.lock:
+                                # Increases the filesize by 33%, but can be sent in JSON
                                 self.latest_frame = base64.b64encode(encframe).decode("utf-8")
                 except Exception as e:
                     logging.warning(f"[{self.name}] camera error: {e}")
@@ -244,11 +246,6 @@ def teleop_loop(
                     for cam_name, reader in camera_readers.items():
                         frame = reader.get_latest_frame()
                         if frame is not None:
-                            # frame = cv2.resize(frame, (512,512), interpolation=cv2.INTER_AREA)
-                            # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
-                            # result, encframe = cv2.imencode('.jpg', frame, encode_param)
-                            # if result:
-                            #     camera_data[cam_name] = base64.b64encode(encframe).decode("utf-8")
                             camera_data[cam_name] = frame
 
                 full_obs = obs | camera_data
@@ -259,10 +256,10 @@ def teleop_loop(
                     "action": robot_action_to_send,
                     "timestamp": time.time(),
                 }
-                serialized = pickle.dumps(obs_data)
+                json_obs = json.dumps(obs_data)
                 # COPIED: Non-blocking send pattern from xlerobot_host.py (lines 104-107) and lekiwi_host.py (lines 113-116)
                 # Use non-blocking send to avoid stalling if no receiver is present
-                zmq_socket.send(serialized, zmq.NOBLOCK)
+                zmq_socket.send(json_obs, zmq.NOBLOCK)
             except zmq.Again:
                 # No receiver is available, continue without error
                 pass

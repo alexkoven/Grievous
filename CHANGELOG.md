@@ -75,4 +75,7 @@
   
   '''
 
+## [alex_grievous_record] - 2025-11-03
+- **grievous_teleoperate.py**
+  - Changed pickle to JSON for sending data over ZMQ
 

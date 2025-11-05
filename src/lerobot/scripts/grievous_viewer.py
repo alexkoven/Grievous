@@ -38,6 +38,7 @@ import zmq
 import numpy as np
 import base64
 import cv2
+import json
 
 # COPIED: Rerun import from lerobot_teleoperate.py
 import rerun as rr
@@ -102,7 +103,7 @@ def grievous_viewer(cfg: GrievousViewerConfig):
         while True:
             # Receive observation data
             data = zmq_socket.recv()
-            obs_data = pickle.loads(data)
+            obs_data = json.loads(data)
             
             # Extract observation and action
             obs = obs_data["observation"]
