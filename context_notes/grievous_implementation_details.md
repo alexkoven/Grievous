@@ -282,32 +282,35 @@ from .grievous_host import GrievousHost
 **Purpose**: Verify real hardware connectivity and network communication before full integration
 
 #### Part A: RPi5 Hardware Validation
-- [ ] Power on RPi5 and wait for boot
-- [ ] SSH into RPi5: `ssh user@rpi5_ip`
-- [ ] Navigate to repo: `cd ~/Code/lerobot-xlerobot-integration`
-- [ ] Activate conda: `conda activate lerobot`
-- [ ] Verify USB devices exist:
-  - [ ] `ls /dev/ttyACM*` (should show ACM0, ACM1, ACM2, ACM3)
-  - [ ] `ls /dev/video*` (should show video6, video8)
-  - [ ] `rs-enumerate-devices | grep 032622074046` (verify RealSense)
-- [ ] Test XLerobot component alone:
-  - [ ] Command: `python3 -c "from lerobot.robots.xlerobot import XLerobot, XLerobotConfig; robot = XLerobot(XLerobotConfig()); robot.connect(); print('XLerobot OK')"`
-  - [ ] Expected: "XLerobot OK" (confirms follower arms + base + head + cameras work)
-  - [ ] If fails: Debug port assignments, motor IDs, camera paths
-- [ ] Test BiSO100Leader component alone:
-  - [ ] Command: `python3 -c "from lerobot.teleoperators.bi_so100_leader import BiSO100Leader, BiSO100LeaderConfig; leader = BiSO100Leader(BiSO100LeaderConfig(left_arm_port='/dev/ttyACM3', right_arm_port='/dev/ttyACM2')); leader.connect(); print('Leader OK')"`
-  - [ ] Expected: "Leader OK" (confirms leader arms work)
-  - [ ] If fails: Debug leader port assignments, verify motors respond
-- [ ] Test Grievous composite initialization:
-  - [ ] Command: `python3 -c "from lerobot.robots.grievous import Grievous, GrievousConfig; robot = Grievous(GrievousConfig()); robot.connect(); print('Grievous connected')"`
-  - [ ] Expected: "Grievous connected" (confirms composition works)
-  - [ ] If fails: Check error messages for which component failed
-- [ ] Test Grievous observation retrieval:
-  - [ ] Command: `python3 -c "from lerobot.robots.grievous import Grievous, GrievousConfig; robot = Grievous(GrievousConfig()); robot.connect(); obs = robot.get_observation(); print(f'Got {len(obs)} observation keys'); leader_keys = [k for k in obs.keys() if '_leader' in k]; print(f'Leader keys: {len(leader_keys)}')"`
-  - [ ] Expected: ~30-40 observation keys, 12 leader keys
-  - [ ] Verify leader states have `_leader` suffix
-  - [ ] If fails: Check if leader.get_action() works, verify key naming
-- [ ] Disconnect and verify cleanup: `robot.disconnect()`
+- [x] Power on RPi5 and wait for boot
+- [x] SSH into RPi5 (via Cursor remote-ssh)
+- [x] Navigate to repo: `cd ~/Grievous`
+- [x] Activate conda: `conda activate lerobot`
+- [x] Verify USB devices exist:
+  - [x] `ls /dev/ttyACM*` (confirmed ACM0, ACM1, ACM2, ACM3)
+  - [x] `ls /dev/video*` (confirmed video6, video8 present)
+  - [x] RealSense enumeration (skipped - not critical for initial testing)
+- [x] Test XLerobot component alone:
+  - [x] Command: `python3 -c "from lerobot.robots.xlerobot import XLerobot, XLerobotConfig; robot = XLerobot(XLerobotConfig()); robot.connect(calibrate=False); print('XLerobot OK')"`
+  - [x] Result: "XLerobot OK" - Hardware initialization successful
+  - [x] All components connected: follower arms, base, head, cameras
+- [x] Test BiSO100Leader component alone:
+  - [x] Command: `python3 -c "from lerobot.teleoperators.bi_so100_leader import BiSO100Leader, BiSO100LeaderConfig; leader = BiSO100Leader(BiSO100LeaderConfig(left_arm_port='/dev/ttyACM3', right_arm_port='/dev/ttyACM2')); leader.connect(calibrate=False); print('Leader OK')"`
+  - [x] Result: "Leader OK" - Both leader arms connected successfully
+- [x] Test Grievous composite initialization:
+  - [x] Command: `python3 -c "from lerobot.robots.grievous import Grievous, GrievousConfig; robot = Grievous(GrievousConfig()); robot.connect(calibrate=False); print('Grievous connected')"`
+  - [x] Result: "Grievous connected" - Composition pattern works with real hardware
+  - [x] Both XLerobot and BiSO100Leader connected simultaneously (no port conflicts)
+- [x] Test Grievous observation retrieval with calibration:
+  - [x] Script: `./test_grievous.sh` (interactive calibration + observation test)
+  - [x] Result: **32 observation keys** (17 follower + 12 leader + 3 cameras)
+  - [x] Leader states verified with `_leader` suffix (e.g., `left_shoulder_pan.pos_leader`)
+  - [x] Follower states verified (e.g., `left_arm_shoulder_pan.pos`)
+  - [x] Camera shapes verified: left_wrist (480×640×3), right_wrist (480×640×3), head (720×1280×3)
+  - [x] Calibration saved to `/home/xlerobot/.cache/huggingface/lerobot/calibration/`
+- [x] Disconnect and verify cleanup: `robot.disconnect()` successful
+
+**Part A Status: ✅ COMPLETE** - All hardware validation tests passed!
 
 #### Part B: Network Communication Test
 - [ ] Keep RPi5 powered on from Part A
