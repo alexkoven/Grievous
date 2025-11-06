@@ -8,11 +8,11 @@ def main():
     print("Grievous Hardware Validation Test")
     print("=" * 60)
     
-    # Create robot
+    # Create robot with proper ID for calibration management
     print("\n[1/4] Creating Grievous robot...")
-    config = GrievousConfig(id="grievous_test")
+    config = GrievousConfig(id="grievous_robot")  # Proper ID to avoid None collisions
     robot = Grievous(config)
-    print("✅ Grievous created")
+    print("✅ Grievous created with ID: grievous_robot")
     
     # Connect with calibration (interactive)
     print("\n[2/4] Connecting and calibrating...")

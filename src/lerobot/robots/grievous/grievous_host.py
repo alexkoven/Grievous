@@ -100,11 +100,12 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
     logger.info("Configuring Grievous robot...")
-    robot_config = GrievousConfig(id="grievous_rpi5")
+    # Use proper ID for calibration management (avoids None collisions)
+    robot_config = GrievousConfig(id="grievous_robot")
     robot = Grievous(robot_config)
     
-    logger.info("Connecting Grievous robot...")
-    robot.connect()
+    logger.info("Connecting Grievous robot (using existing calibration)...")
+    robot.connect(calibrate=False)  # Use existing calibration from cache
     logger.info("Grievous connected successfully")
     
     logger.info("Starting GrievousHost daemon...")
