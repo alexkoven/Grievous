@@ -1,0 +1,155 @@
+#!/usr/bin/env python
+
+# Copyright 2025 Alexander Nettekoven, The University of Texas at Austin
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Configuration classes for Grievous robot (XLerobot + BiSO100Leader)."""
+
+from dataclasses import dataclass, field
+
+from lerobot.cameras.configs import CameraConfig, Cv2Rotation, ColorMode
+from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
+from lerobot.cameras.realsense import RealSenseCameraConfig
+
+from ..config import RobotConfig
+
+
+def grievous_cameras_config() -> dict[str, CameraConfig]:
+    """Default camera configuration for Grievous (same as XLerobot)."""
+    return {
+        "left_wrist": OpenCVCameraConfig(
+            index_or_path="/dev/video6", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        ),
+        "right_wrist": OpenCVCameraConfig(
+            index_or_path="/dev/video8", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+        ),
+        "head": RealSenseCameraConfig(
+            serial_number_or_name="032622074046",
+            fps=30,
+            width=1280,
+            height=720,
+            color_mode=ColorMode.BGR,
+            rotation=Cv2Rotation.NO_ROTATION,
+            use_depth=True
+        ),
+    }
+
+
+@RobotConfig.register_subclass("grievous")
+@dataclass
+class GrievousConfig(RobotConfig):
+    """Configuration for Grievous robot hardware on RPi5.
+    
+    Grievous = XLerobot (follower arms + base + head) + BiSO100Leader (leader arms)
+    
+    Default port configuration (from run_grievous.sh):
+    - Leader left arm:  /dev/ttyACM3
+    - Leader right arm: /dev/ttyACM2
+    - Follower left arm + head: /dev/ttyACM0
+    - Follower right arm + base: /dev/ttyACM1
+    """
+    
+    # Leader arms ports (BiSO100Leader pattern)
+    leader_left_arm_port: str = "/dev/ttyACM3"
+    leader_right_arm_port: str = "/dev/ttyACM2"
+    
+    # Follower arms ports (XLerobot pattern)
+    port1: str = "/dev/ttyACM0"  # Left follower arm + head motors
+    port2: str = "/dev/ttyACM1"  # Right follower arm + base motors
+    
+    # Motor settings
+    disable_torque_on_disconnect: bool = True
+    max_relative_target: int | None = None
+    use_degrees: bool = False
+    
+    # Cameras (shared with follower)
+    cameras: dict[str, CameraConfig] = field(default_factory=grievous_cameras_config)
+    
+    # Teleop keys for base control
+    teleop_keys: dict[str, str] = field(
+        default_factory=lambda: {
+            # Movement
+            "forward": "i",
+            "backward": "k",
+            "left": "j",
+            "right": "l",
+            "rotate_left": "u",
+            "rotate_right": "o",
+            # Speed control
+            "speed_up": "n",
+            "speed_down": "m",
+            # Quit teleop
+            "quit": "b",
+        }
+    )
+
+
+@dataclass
+class GrievousHostConfig:
+    """Configuration for Grievous host daemon running on RPi5.
+    
+    This is not a RobotConfig - it's for the host process configuration.
+    """
+    
+    # Network Configuration
+    port_zmq_cmd: int = 5555
+    port_zmq_observations: int = 5556
+    
+    # Runtime configuration
+    connection_time_s: int = 3600  # Max runtime before auto-shutdown
+    watchdog_timeout_ms: int = 500  # Stop robot if no commands received
+    max_loop_freq_hz: int = 30  # Control loop frequency
+
+
+@RobotConfig.register_subclass("grievous_client")
+@dataclass
+class GrievousClientConfig(RobotConfig):
+    """Configuration for Grievous network client on laptop.
+    
+    Provides network-transparent Robot interface to remote Grievous.
+    """
+    
+    # REQUIRED FIELDS FIRST (no defaults)
+    remote_ip: str  # IP address of RPi5 - REQUIRED
+    
+    # OPTIONAL FIELDS (with defaults)
+    # ZMQ ports (must match host)
+    port_zmq_cmd: int = 5555
+    port_zmq_observations: int = 5556
+    
+    # Polling configuration
+    polling_timeout_ms: int = 15
+    connect_timeout_s: int = 5
+    
+    # Camera metadata (for dataset features - not actual devices)
+    cameras: dict[str, CameraConfig] = field(default_factory=grievous_cameras_config)
+    
+    # Teleop keys (for base control via keyboard)
+    teleop_keys: dict[str, str] = field(
+        default_factory=lambda: {
+            # Movement
+            "forward": "i",
+            "backward": "k",
+            "left": "j",
+            "right": "l",
+            "rotate_left": "u",
+            "rotate_right": "o",
+            # Speed control
+            "speed_up": "n",
+            "speed_down": "m",
+            # Quit teleop
+            "quit": "b",
+        }
+    )
+
