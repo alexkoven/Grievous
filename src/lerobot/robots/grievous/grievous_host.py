@@ -131,6 +131,7 @@ def main():
                 
                 # Send action to follower (XLerobot component)
                 robot.send_action(data)
+                print(f"Sent action to follower: {data}")
                 
                 # Reset watchdog timer
                 last_cmd_time = time.time()
@@ -141,7 +142,7 @@ def main():
                 if not watchdog_active:
                     logger.debug("No command available")
             except Exception as e:
-                logger.error(f"Message fetching failed: {e}")
+                logger.debug(f"Message fetching failed: {e}")
             
             # 2. Check watchdog timer
             now = time.time()

@@ -227,6 +227,60 @@ calibrate_robot() {
     python3 test_grievous_hardware.py
 }
 
+# Function to test lerobot-teleoperate
+test_lerobot_teleoperate() {
+    if is_running; then
+        echo -e "${YELLOW}⚠️  Please stop the host daemon before testing${NC}"
+        echo "This test will use local hardware directly."
+        echo "Use option 2 to stop the daemon."
+        return 1
+    fi
+    
+    echo "============================================================"
+    echo "Test lerobot-teleoperate (EXPERIMENTAL)"
+    echo "============================================================"
+    echo ""
+    echo "This will test if the standard lerobot-teleoperate command"
+    echo "can work with Grievous in the current architecture."
+    echo ""
+    echo "Expected behavior:"
+    echo "  - Robot: Grievous (includes follower + leader in observations)"
+    echo "  - Teleop: BiSO100Leader (separate leader arm connection)"
+    echo ""
+    echo -e "${YELLOW}⚠️  KNOWN ISSUE:${NC}"
+    echo "  This will likely FAIL because:"
+    echo "  1. Grievous already includes leader arms internally"
+    echo "  2. BiSO100Leader will try to connect to same hardware"
+    echo "  3. USB device conflict (can't open /dev/ttyACM2-3 twice)"
+    echo ""
+    echo "This test is to observe the error and understand the limitation."
+    echo ""
+    read -p "Press ENTER to continue with the test..."
+    
+    echo ""
+    echo "[INFO] Running lerobot-teleoperate with:"
+    echo "  --robot.type=grievous"
+    echo "  --robot.id=$ROBOT_ID"
+    echo "  --teleop.type=bi_so100_leader"
+    echo "  --teleop.id=${ROBOT_ID}_leader"
+    echo "  --teleop.left_arm_port=/dev/ttyACM3"
+    echo "  --teleop.right_arm_port=/dev/ttyACM2"
+    echo "  --display_data=true"
+    echo ""
+    
+    lerobot-teleoperate \
+        --robot.type=grievous \
+        --robot.id=$ROBOT_ID \
+        --teleop.type=bi_so100_leader \
+        --teleop.id=${ROBOT_ID}_leader \
+        --teleop.left_arm_port=/dev/ttyACM3 \
+        --teleop.right_arm_port=/dev/ttyACM2 \
+        --display_data=true
+    
+    echo ""
+    echo "Test completed (or failed as expected)."
+}
+
 # Main menu
 echo "============================================================"
 echo "Grievous Control Menu (RPi5)"
@@ -259,9 +313,14 @@ echo "  5) Calibrate Robot"
 echo "     - Run interactive calibration"
 echo "     - Required before first use"
 echo ""
+echo "  6) Test lerobot-teleoperate (LOCAL)"
+echo "     - EXPERIMENTAL: Test standard lerobot-teleoperate"
+echo "     - Uses local hardware (not network)"
+echo "     - May fail due to hardware conflicts"
+echo ""
 echo "  q) Quit"
 echo ""
-read -p "Enter choice [1/2/3/4/5/q]: " choice
+read -p "Enter choice [1/2/3/4/5/6/q]: " choice
 
 case $choice in
     1)
@@ -279,12 +338,15 @@ case $choice in
     5)
         calibrate_robot
         ;;
+    6)
+        test_lerobot_teleoperate
+        ;;
     q|Q)
         echo "Exiting..."
         exit 0
         ;;
     *)
-        echo "Invalid choice. Please run again and select 1, 2, 3, 4, 5, or q."
+        echo "Invalid choice. Please run again and select 1, 2, 3, 4, 5, 6, or q."
         exit 1
         ;;
 esac

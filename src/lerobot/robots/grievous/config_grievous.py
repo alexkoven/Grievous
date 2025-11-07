@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration classes for Grievous robot (XLerobot + BiSO100Leader)."""
+"""Configuration classes for Grievous robot (XLerobot)."""
 
 from dataclasses import dataclass, field
 
@@ -51,18 +51,12 @@ def grievous_cameras_config() -> dict[str, CameraConfig]:
 class GrievousConfig(RobotConfig):
     """Configuration for Grievous robot hardware on RPi5.
     
-    Grievous = XLerobot (follower arms + base + head) + BiSO100Leader (leader arms)
+    Grievous = XLerobot (follower arms + base + head + cameras)
     
     Default port configuration (from run_grievous.sh):
-    - Leader left arm:  /dev/ttyACM3
-    - Leader right arm: /dev/ttyACM2
     - Follower left arm + head: /dev/ttyACM0
     - Follower right arm + base: /dev/ttyACM1
     """
-    
-    # Leader arms ports (BiSO100Leader pattern)
-    leader_left_arm_port: str = "/dev/ttyACM3"
-    leader_right_arm_port: str = "/dev/ttyACM2"
     
     # Follower arms ports (XLerobot pattern)
     port1: str = "/dev/ttyACM0"  # Left follower arm + head motors
