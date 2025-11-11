@@ -265,7 +265,7 @@ test_lerobot_teleoperate() {
     echo "  --teleop.id=${ROBOT_ID}_leader"
     echo "  --teleop.left_arm_port=/dev/ttyACM3"
     echo "  --teleop.right_arm_port=/dev/ttyACM2"
-    echo "  --display_data=true"
+    echo "  --display_data=false"
     echo ""
     
     lerobot-teleoperate \
@@ -275,7 +275,7 @@ test_lerobot_teleoperate() {
         --teleop.id=${ROBOT_ID}_leader \
         --teleop.left_arm_port=/dev/ttyACM3 \
         --teleop.right_arm_port=/dev/ttyACM2 \
-        --display_data=true
+        --display_data=false
     
     echo ""
     echo "Test completed (or failed as expected)."

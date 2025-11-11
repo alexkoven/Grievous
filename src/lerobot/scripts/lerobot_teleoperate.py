@@ -138,45 +138,69 @@ def teleop_loop(
 
     while True:
         loop_start = time.perf_counter()
+        step_times = {}
 
         # Get robot observation
         # Not really needed for now other than for visualization
         # teleop_action_processor can take None as an observation
         # given that it is the identity processor as default
+        step_start = time.perf_counter()
         obs = robot.get_observation()
+        step_times["get_observation"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Get teleop action
+        step_start = time.perf_counter()
         raw_action = teleop.get_action()
+        step_times["get_teleop_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Process teleop action through pipeline
+        step_start = time.perf_counter()
         teleop_action = teleop_action_processor((raw_action, obs))
+        step_times["process_teleop_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Process action for robot through pipeline
+        step_start = time.perf_counter()
         robot_action_to_send = robot_action_processor((teleop_action, obs))
+        step_times["process_robot_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Send processed action to robot (robot_action_processor.to_output should return dict[str, Any])
+        step_start = time.perf_counter()
         _ = robot.send_action(robot_action_to_send)
+        step_times["send_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         if display_data:
             # Process robot observation through pipeline
+            step_start = time.perf_counter()
             obs_transition = robot_observation_processor(obs)
+            step_times["process_observation"] = (time.perf_counter() - step_start) * 1000  # ms
 
+            step_start = time.perf_counter()
             log_rerun_data(
                 observation=obs_transition,
                 action=teleop_action,
             )
+            step_times["log_rerun"] = (time.perf_counter() - step_start) * 1000  # ms
 
+            step_start = time.perf_counter()
             print("\n" + "-" * (display_len + 10))
             print(f"{'NAME':<{display_len}} | {'NORM':>7}")
             # Display the final robot action that was sent
             for motor, value in robot_action_to_send.items():
                 print(f"{motor:<{display_len}} | {value:>7.2f}")
             move_cursor_up(len(robot_action_to_send) + 5)
+            step_times["display"] = (time.perf_counter() - step_start) * 1000  # ms
 
+        step_start = time.perf_counter()
         dt_s = time.perf_counter() - loop_start
         busy_wait(1 / fps - dt_s)
+        step_times["busy_wait"] = (time.perf_counter() - step_start) * 1000  # ms
+
         loop_s = time.perf_counter() - loop_start
-        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+        # Display timing information
+        timing_str = " | ".join([f"{k}: {v:.2f}ms" for k, v in step_times.items()])
+        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz) | {timing_str}")
+        # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+
 
         if duration is not None and time.perf_counter() - start >= duration:
             return
