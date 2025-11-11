@@ -65,8 +65,8 @@ class GrievousConfig(RobotConfig):
     port2: str = "/dev/ttyACM1"  # Right follower arm + base motors
     
     # Leader arms ports
-    leader_left_arm_port: str = "/dev/ttyACM2"
-    leader_right_arm_port: str = "/dev/ttyACM3"
+    leader_left_arm_port: str = "/dev/ttyACM3"
+    leader_right_arm_port: str = "/dev/ttyACM2"
     
     # Motor settings
     disable_torque_on_disconnect: bool = True
@@ -121,7 +121,7 @@ class GrievousClientConfig(RobotConfig):
     """
     
     # REQUIRED FIELDS FIRST (no defaults)
-    remote_ip: str  # IP address of RPi5 - REQUIRED
+    remote_ip: str = "192.168.50.148" # IP address of RPi5 - REQUIRED
     
     # OPTIONAL FIELDS (with defaults)
     # ZMQ ports (must match host)

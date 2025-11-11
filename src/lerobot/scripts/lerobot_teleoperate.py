@@ -208,7 +208,7 @@ def teleop_loop(
         loop_s = time.perf_counter() - loop_start
         # Display timing information
         timing_str = " | ".join([f"{k}: {v:.2f}ms" for k, v in step_times.items()])
-        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz) | {timing_str}")
+        # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz) | {timing_str}")
         # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
 
 

@@ -473,6 +473,4 @@ class GrievousClient(Robot):
             logger.warning("Command socket busy, dropping action")
         except Exception as e:
             logger.error(f"Error sending action: {e}")
-
         return action
-
