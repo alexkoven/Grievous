@@ -75,7 +75,7 @@ def log_rerun_data(
                     for i, vi in enumerate(arr):
                         rr.log(f"{key}_{i}", rr.Scalars(float(vi)))
                 else:
-                    rr.log(key, rr.Image(arr))
+                    rr.log(key, rr.Image(arr), static=True)
 
     if action:
         for k, v in action.items():
