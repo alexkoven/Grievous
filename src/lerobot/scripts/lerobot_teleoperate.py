@@ -98,8 +98,8 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 @dataclass
 class TeleoperateConfig:
     # TODO: pepijn, steven: if more robots require multiple teleoperators (like lekiwi) its good to make this possibele in teleop.py and record.py with List[Teleoperator]
-    teleop: TeleoperatorConfig | None = None
     robot: RobotConfig
+    teleop: TeleoperatorConfig | None = None
     # Limit the maximum frames per second.
     fps: int = 60
     teleop_time_s: float | None = None

@@ -5,10 +5,10 @@
 set -e  # Exit on error
 
 # Navigate to workspace
-cd /home/xlerobot/Grievous
+#cd /home/xlerobot/Grievous
 
 # Activate conda environment
-source /home/xlerobot/miniconda3/bin/activate lerobot
+#source /home/xlerobot/miniconda3/bin/activate lerobot
 
 echo "============================================================"
 echo "Grievous Testing Menu"

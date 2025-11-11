@@ -34,6 +34,7 @@ import logging
 import time
 
 import cv2
+import numpy as np
 import zmq
 
 from .grievous import Grievous
@@ -161,8 +162,15 @@ def main():
             for cam_key in robot.xlerobot.cameras.keys():
                 if cam_key in last_observation:
                     try:
+                        # Check if image is valid (not None and not empty)
+                        img = last_observation[cam_key]
+                        if img is None or not isinstance(img, np.ndarray) or img.size == 0:
+                            logger.debug(f"Camera {cam_key} returned empty/invalid image, skipping encode")
+                            last_observation[cam_key] = ""
+                            continue
+                        
                         ret, buffer = cv2.imencode(
-                            ".jpg", last_observation[cam_key], [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                            ".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 90]
                         )
                         if ret:
                             last_observation[cam_key] = base64.b64encode(buffer).decode("utf-8")
