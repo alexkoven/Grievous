@@ -160,13 +160,17 @@ def main():
             # 4. Encode camera images to base64 for network transmission
             for cam_key in robot.xlerobot.cameras.keys():
                 if cam_key in last_observation:
-                    ret, buffer = cv2.imencode(
-                        ".jpg", last_observation[cam_key], [int(cv2.IMWRITE_JPEG_QUALITY), 90]
-                    )
-                    if ret:
-                        last_observation[cam_key] = base64.b64encode(buffer).decode("utf-8")
-                    else:
-                        logger.warning(f"Failed to encode camera {cam_key}")
+                    try:
+                        ret, buffer = cv2.imencode(
+                            ".jpg", last_observation[cam_key], [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+                        )
+                        if ret:
+                            last_observation[cam_key] = base64.b64encode(buffer).decode("utf-8")
+                        else:
+                            logger.warning(f"Failed to encode camera {cam_key}")
+                            last_observation[cam_key] = ""
+                    except Exception as e:
+                        logger.error(f"Failed to encode camera {cam_key}: {e}")
                         last_observation[cam_key] = ""
             
             # 5. Send observation to remote client

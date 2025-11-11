@@ -51,16 +51,22 @@ def grievous_cameras_config() -> dict[str, CameraConfig]:
 class GrievousConfig(RobotConfig):
     """Configuration for Grievous robot hardware on RPi5.
     
-    Grievous = XLerobot (follower arms + base + head + cameras)
+    Grievous = XLerobot (follower arms + base + head + cameras) + BiSO100Leader (leader arms)
     
     Default port configuration (from run_grievous.sh):
     - Follower left arm + head: /dev/ttyACM0
     - Follower right arm + base: /dev/ttyACM1
+    - Leader left arm: /dev/ttyACM2
+    - Leader right arm: /dev/ttyACM3
     """
     
     # Follower arms ports (XLerobot pattern)
     port1: str = "/dev/ttyACM0"  # Left follower arm + head motors
     port2: str = "/dev/ttyACM1"  # Right follower arm + base motors
+    
+    # Leader arms ports
+    leader_left_arm_port: str = "/dev/ttyACM2"
+    leader_right_arm_port: str = "/dev/ttyACM3"
     
     # Motor settings
     disable_torque_on_disconnect: bool = True

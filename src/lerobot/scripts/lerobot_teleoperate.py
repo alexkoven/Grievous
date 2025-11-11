@@ -98,7 +98,7 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 @dataclass
 class TeleoperateConfig:
     # TODO: pepijn, steven: if more robots require multiple teleoperators (like lekiwi) its good to make this possibele in teleop.py and record.py with List[Teleoperator]
-    teleop: TeleoperatorConfig
+    teleop: TeleoperatorConfig | None = None
     robot: RobotConfig
     # Limit the maximum frames per second.
     fps: int = 60
@@ -108,7 +108,7 @@ class TeleoperateConfig:
 
 
 def teleop_loop(
-    teleop: Teleoperator,
+    teleop: Teleoperator | None,
     robot: Robot,
     fps: int,
     teleop_action_processor: RobotProcessorPipeline[tuple[RobotAction, RobotObservation], RobotAction],
@@ -123,7 +123,8 @@ def teleop_loop(
     specified frequency until a set duration is reached or it is manually interrupted.
 
     Args:
-        teleop: The teleoperator device instance providing control actions.
+        teleop: The teleoperator device instance providing control actions. If None, extracts leader
+                actions from robot observations (for robots like Grievous with built-in leader arms).
         robot: The robot instance being controlled.
         fps: The target frequency for the control loop in frames per second.
         display_data: If True, fetches robot observations and displays them in the console and Rerun.
@@ -150,7 +151,16 @@ def teleop_loop(
 
         # Get teleop action
         step_start = time.perf_counter()
-        raw_action = teleop.get_action()
+        if teleop is not None:
+            raw_action = teleop.get_action()
+        else:
+            # Extract leader actions from robot observations (for Grievous with built-in leader arms)
+            # Leader actions have _leader suffix, remove it to get action format
+            raw_action = {}
+            for key, value in obs.items():
+                if key.endswith("_leader") and isinstance(value, (int, float)):
+                    action_key = key[:-7]  # Remove "_leader" suffix
+                    raw_action[action_key] = value
         step_times["get_teleop_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Process teleop action through pipeline
@@ -213,11 +223,12 @@ def teleoperate(cfg: TeleoperateConfig):
     if cfg.display_data:
         init_rerun(session_name="teleoperation")
 
-    teleop = make_teleoperator_from_config(cfg.teleop)
+    teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
     robot = make_robot_from_config(cfg.robot)
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    teleop.connect()
+    if teleop is not None:
+        teleop.connect()
     robot.connect()
 
     try:
@@ -236,7 +247,8 @@ def teleoperate(cfg: TeleoperateConfig):
     finally:
         if cfg.display_data:
             rr.rerun_shutdown()
-        teleop.disconnect()
+        if teleop is not None:
+            teleop.disconnect()
         robot.disconnect()
 
 

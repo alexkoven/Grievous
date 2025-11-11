@@ -18,7 +18,7 @@
 
 Architecture:
 - XLerobot provides: follower arms (2x SO-101), mobile base, head, cameras
-- Leader arms are provided separately via teleoperator (e.g., bi_so100_leader)
+- BiSO100Leader provides: leader arms (2x SO-100) for teleoperation input
 """
 
 import logging
@@ -27,6 +27,8 @@ from typing import Any
 
 from lerobot.robots.xlerobot import XLerobot
 from lerobot.robots.xlerobot.config_xlerobot import XLerobotConfig
+from lerobot.teleoperators.bi_so100_leader import BiSO100Leader
+from lerobot.teleoperators.bi_so100_leader.config_bi_so100_leader import BiSO100LeaderConfig
 
 from ..robot import Robot
 from .config_grievous import GrievousConfig
@@ -69,16 +71,31 @@ class Grievous(Robot):
         # Instantiate XLerobot
         self.xlerobot = XLerobot(xlerobot_config)
 
+        # Create BiSO100Leader configuration (leader arms)
+        leader_config = BiSO100LeaderConfig(
+            id=f"{config.id}_leader" if config.id else None,
+            calibration_dir=config.calibration_dir,
+            left_arm_port=config.leader_left_arm_port,
+            right_arm_port=config.leader_right_arm_port,
+        )
+
+        # Instantiate leader arms
+        self.leader_arms = BiSO100Leader(leader_config)
+
         logger.info(f"Grievous robot initialized: {config.id}")
 
     @cached_property
     def observation_features(self) -> dict[str, type | tuple]:
-        """Observation features from XLerobot (arms, base, head, cameras).
+        """Observation features from XLerobot (arms, base, head, cameras) + leader arms.
         
         Returns:
             Dictionary mapping feature names to types/shapes
         """
-        return self.xlerobot.observation_features
+        obs = dict(self.xlerobot.observation_features)
+        # Add leader arm observations with _leader suffix
+        for key in self.leader_arms.action_features:
+            obs[f"{key}_leader"] = float
+        return obs
 
     @cached_property
     def action_features(self) -> dict[str, type]:
@@ -91,52 +108,61 @@ class Grievous(Robot):
 
     @property
     def is_connected(self) -> bool:
-        """Check if XLerobot is connected."""
-        return self.xlerobot.is_connected
+        """Check if XLerobot and leader arms are connected."""
+        return self.xlerobot.is_connected and self.leader_arms.is_connected
 
     @property
     def is_calibrated(self) -> bool:
-        """Check if XLerobot is calibrated."""
-        return self.xlerobot.is_calibrated
+        """Check if XLerobot and leader arms are calibrated."""
+        return self.xlerobot.is_calibrated and self.leader_arms.is_calibrated
 
     def connect(self, calibrate: bool = True) -> None:
-        """Connect XLerobot.
+        """Connect XLerobot and leader arms.
         
         Args:
             calibrate: Whether to calibrate after connecting
         """
         logger.info("Connecting Grievous...")
         self.xlerobot.connect(calibrate=calibrate)
+        self.leader_arms.connect(calibrate=calibrate)
         logger.info("Grievous connected successfully")
 
     def disconnect(self) -> None:
-        """Disconnect XLerobot."""
+        """Disconnect XLerobot and leader arms."""
         logger.info("Disconnecting Grievous...")
         self.xlerobot.disconnect()
+        self.leader_arms.disconnect()
         logger.info("Grievous disconnected")
 
     def calibrate(self) -> None:
-        """Calibrate XLerobot."""
+        """Calibrate XLerobot and leader arms."""
         logger.info("Calibrating Grievous...")
         self.xlerobot.calibrate()
+        self.leader_arms.calibrate()
         logger.info("Grievous calibrated successfully")
 
     def configure(self) -> None:
-        """Configure XLerobot.
+        """Configure XLerobot and leader arms.
         
         Sets motor parameters, control modes, and initial state.
         """
         logger.info("Configuring Grievous...")
         self.xlerobot.configure()
+        self.leader_arms.configure()
         logger.info("Grievous configured successfully")
 
     def get_observation(self) -> dict[str, Any]:
-        """Get observation from XLerobot (arms, base, head, cameras).
+        """Get observation from XLerobot (arms, base, head, cameras) + leader arms.
         
         Returns:
-            Dictionary with observation data
+            Dictionary with observation data including leader arm positions with _leader suffix
         """
-        return self.xlerobot.get_observation()
+        obs = self.xlerobot.get_observation()
+        # Add leader arm observations with _leader suffix
+        leader_action = self.leader_arms.get_action()
+        for key, value in leader_action.items():
+            obs[f"{key}_leader"] = value
+        return obs
 
     def send_action(self, action: dict[str, Any]) -> None:
         """Send action to XLerobot (arms, base, head).
