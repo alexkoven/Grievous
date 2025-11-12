@@ -37,6 +37,13 @@ import cv2
 import numpy as np
 import zmq
 
+from lerobot.processor import (
+    RobotAction,
+    RobotObservation,
+    RobotProcessorPipeline,
+    make_default_processors,
+)
+
 from .grievous import Grievous
 from .config_grievous import GrievousConfig, GrievousHostConfig
 
@@ -112,6 +119,8 @@ def main():
     logger.info("Starting GrievousHost daemon...")
     host_config = GrievousHostConfig()
     host = GrievousHost(host_config)
+
+    teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
     
     last_cmd_time = time.time()
     watchdog_active = False
@@ -155,8 +164,13 @@ def main():
                 # Stop the mobile base (safety feature)
                 robot.xlerobot.stop_base()
             
-            # 3. Get observation from Grievous (follower + leader + cameras)
+            # 3. Get observation and actionfrom Grievous (follower + cameras)
             last_observation = robot.get_observation()
+            action = robot.get_action()
+            # Action processors should be better understood, and potentially removed
+            teleop_action = teleop_action_processor((action, last_observation))
+            robot_action = robot_action_processor((teleop_action, last_observation))
+            robot.send_action(robot_action)
             
             # 4. Encode camera images to base64 for network transmission
             for cam_key in robot.xlerobot.cameras.keys():

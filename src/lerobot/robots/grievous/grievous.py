@@ -159,10 +159,21 @@ class Grievous(Robot):
         """
         obs = self.xlerobot.get_observation()
         # Add leader arm observations with _leader suffix
-        leader_action = self.leader_arms.get_action()
-        for key, value in leader_action.items():
-            obs[f"{key}_leader"] = value
-        return obs
+        # leader_action = self.leader_arms.get_action()
+        # for key, value in leader_action.items():
+        #     obs[f"{key}_leader"] = value
+        # return obs
+
+    def get_action(self) -> dict[str, Any]:
+        """Get action from leader arms.
+        
+        Returns:
+            Dictionary with action data including leader arm positions with _leader suffix
+        """
+        action = self.leader_arms.get_action()
+        for key, value in action.items():
+            action[f"{key}_leader"] = value
+        return action
 
     def send_action(self, action: dict[str, Any]) -> None:
         """Send action to XLerobot (arms, base, head).
