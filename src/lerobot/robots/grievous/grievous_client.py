@@ -168,6 +168,11 @@ class GrievousClient(Robot):
         return self._follower_state_ft
 
     @property
+    def cameras(self) -> dict:
+        """Camera dict for compatibility with recording."""
+        return {name: None for name in self.config.cameras}
+
+    @property
     def is_connected(self) -> bool:
         """Check if connected to remote Grievous host."""
         return self._is_connected

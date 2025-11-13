@@ -175,7 +175,6 @@ def main():
             
             # 4. Encode camera images to base64 for network transmission
             for cam_key in robot.xlerobot.cameras.keys():
-                print(f"Camera key: {cam_key}")
                 if cam_key in last_observation:
                     # Check if image is valid (not None and not empty)
                     try:
