@@ -162,7 +162,7 @@ class Grievous(Robot):
         # leader_action = self.leader_arms.get_action()
         # for key, value in leader_action.items():
         #     obs[f"{key}_leader"] = value
-        # return obs
+        return obs
 
     def get_action(self) -> dict[str, Any]:
         """Get action from leader arms.
@@ -171,8 +171,10 @@ class Grievous(Robot):
             Dictionary with action data including leader arm positions with _leader suffix
         """
         action = self.leader_arms.get_action()
-        for key, value in action.items():
-            action[f"{key}_leader"] = value
+        # leader_action = {}
+        # for key, value in action.items():
+        #     leader_action[f"{key}_leader"] = value
+        # return leader_action
         return action
 
     def send_action(self, action: dict[str, Any]) -> None:

@@ -134,25 +134,26 @@ def main():
         while duration < host.connection_time_s:
             loop_start_time = time.time()
             
-            # 1. Receive action commands from client
-            try:
-                msg = host.zmq_cmd_socket.recv_string(zmq.NOBLOCK)
-                data = dict(json.loads(msg))
+            # Adapt when base and head controls are implemented
+            # # 1. Receive action commands from client
+            # try:
+            #     msg = host.zmq_cmd_socket.recv_string(zmq.NOBLOCK)
+            #     data = dict(json.loads(msg))
                 
-                # Send action to follower (XLerobot component)
-                robot.send_action(data)
-                print(f"Sent action to follower: {data}")
+            #     # Send action to follower (XLerobot component)
+            #     robot.send_action(data)
+            #     print(f"Sent action to follower: {data}")
                 
-                # Reset watchdog timer
-                last_cmd_time = time.time()
-                watchdog_active = False
+            #     # Reset watchdog timer
+            #     last_cmd_time = time.time()
+            #     watchdog_active = False
                 
-            except zmq.Again:
-                # No command available (non-blocking)
-                if not watchdog_active:
-                    logger.debug("No command available")
-            except Exception as e:
-                logger.debug(f"Message fetching failed: {e}")
+            # except zmq.Again:
+            #     # No command available (non-blocking)
+            #     if not watchdog_active:
+            #         logger.debug("No command available")
+            # except Exception as e:
+            #     logger.debug(f"Message fetching failed: {e}")
             
             # 2. Check watchdog timer
             now = time.time()
@@ -170,13 +171,14 @@ def main():
             # Action processors should be better understood, and potentially removed
             teleop_action = teleop_action_processor((action, last_observation))
             robot_action = robot_action_processor((teleop_action, last_observation))
-            robot.send_action(robot_action)
+            robot.send_action(action)
             
             # 4. Encode camera images to base64 for network transmission
             for cam_key in robot.xlerobot.cameras.keys():
+                print(f"Camera key: {cam_key}")
                 if cam_key in last_observation:
+                    # Check if image is valid (not None and not empty)
                     try:
-                        # Check if image is valid (not None and not empty)
                         img = last_observation[cam_key]
                         if img is None or not isinstance(img, np.ndarray) or img.size == 0:
                             logger.debug(f"Camera {cam_key} returned empty/invalid image, skipping encode")
@@ -194,6 +196,7 @@ def main():
                     except Exception as e:
                         logger.error(f"Failed to encode camera {cam_key}: {e}")
                         last_observation[cam_key] = ""
+                    
             
             # 5. Send observation to remote client
             try:

@@ -539,7 +539,7 @@ class XLerobot(Robot):
         """
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
-        
+
         left_arm_pos = {k: v for k, v in action.items() if k.startswith("left_arm_") and k.endswith(".pos")}
         right_arm_pos = {k: v for k, v in action.items() if k.startswith("right_arm_") and k.endswith(".pos")}
         head_pos = {k: v for k, v in action.items() if k.startswith("head_") and k.endswith(".pos")}
@@ -549,7 +549,6 @@ class XLerobot(Robot):
             base_goal_vel.get("y.vel", 0.0),
             base_goal_vel.get("theta.vel", 0.0),
         )
-        
         
         if self.config.max_relative_target is not None:
             # Read present positions for left arm, right arm, and head
