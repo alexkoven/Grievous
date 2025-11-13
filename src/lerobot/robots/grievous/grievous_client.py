@@ -406,7 +406,7 @@ class GrievousClient(Robot):
                 cam_cfg = self.config.cameras[cam_name]
                 frame = np.zeros((cam_cfg.height, cam_cfg.width, 3), dtype=np.uint8)
             obs_dict[cam_name] = frame
-
+            
         return obs_dict
 
     def _from_keyboard_to_base_action(self, pressed_keys: np.ndarray) -> dict[str, float]:
@@ -473,7 +473,8 @@ class GrievousClient(Robot):
 
         # Send action via ZMQ
         try:
-            self.zmq_cmd_socket.send_string(json.dumps(action), flags=zmq.NOBLOCK)
+            # self.zmq_cmd_socket.send_string(json.dumps(action), flags=zmq.NOBLOCK)
+            pass
         except zmq.Again:
             logger.warning("Command socket busy, dropping action")
         except Exception as e:

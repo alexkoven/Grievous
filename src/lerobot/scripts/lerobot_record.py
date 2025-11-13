@@ -104,6 +104,7 @@ from lerobot.teleoperators import (  # noqa: F401
     Teleoperator,
     TeleoperatorConfig,
     bi_so100_leader,
+    grievous_leader,
     homunculus,
     koch_leader,
     make_teleoperator_from_config,
