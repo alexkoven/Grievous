@@ -18,13 +18,14 @@
 
 This daemon:
 - Instantiates the Grievous robot (follower arms + base + head + leader arms)
-- Opens ZMQ sockets to receive commands and send observations
+- Opens ZMQ sockets to send processed actions and observations
 - Runs a control loop that:
-  * Receives action commands from remote client (laptop)
+  * Gets actions from leader arms
+  * Processes actions through processor pipelines
   * Sends actions to follower (XLerobot)
   * Reads observations from both follower and leader
   * Encodes camera images to base64
-  * Sends observations back to client
+  * Sends processed actions and observations back to client
   * Implements watchdog timer for safety (stops base if no commands)
 """
 
@@ -66,8 +67,8 @@ class GrievousHost:
         """
         self.zmq_context = zmq.Context()
         
-        # Command socket: receive actions from client
-        self.zmq_cmd_socket = self.zmq_context.socket(zmq.PULL)
+        # Command socket: send processed actions to client
+        self.zmq_cmd_socket = self.zmq_context.socket(zmq.PUSH)
         self.zmq_cmd_socket.setsockopt(zmq.CONFLATE, 1)  # Keep only latest message
         self.zmq_cmd_socket.bind(f"tcp://*:{config.port_zmq_cmd}")
         logger.info(f"Command socket bound to tcp://*:{config.port_zmq_cmd}")
@@ -98,12 +99,14 @@ def main():
     """Main entry point for Grievous host daemon.
     
     Runs control loop that:
-    1. Receives actions from remote client
-    2. Sends actions to Grievous follower
-    3. Reads observations from Grievous (follower + leader)
-    4. Encodes camera images to base64
-    5. Sends observations to remote client
-    6. Implements watchdog safety timer
+    1. Gets actions from leader arms
+    2. Processes actions through processor pipelines
+    3. Sends actions to Grievous follower
+    4. Reads observations from Grievous (follower + leader)
+    5. Encodes camera images to base64
+    6. Sends processed actions to remote client via command socket
+    7. Sends observations to remote client via observation socket
+    8. Implements watchdog safety timer
     """
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
@@ -132,10 +135,12 @@ def main():
         duration = 0
         
         while duration < host.connection_time_s:
-            loop_start_time = time.time()
+            loop_start_time = time.perf_counter()
+            step_times = {}
             
             # Adapt when base and head controls are implemented
             # # 1. Receive action commands from client
+            # step_start = time.perf_counter()
             # try:
             #     msg = host.zmq_cmd_socket.recv_string(zmq.NOBLOCK)
             #     data = dict(json.loads(msg))
@@ -154,8 +159,10 @@ def main():
             #         logger.debug("No command available")
             # except Exception as e:
             #     logger.debug(f"Message fetching failed: {e}")
+            # step_times["receive_action"] = (time.perf_counter() - step_start) * 1000  # ms
             
             # 2. Check watchdog timer
+            step_start = time.perf_counter()
             now = time.time()
             if (now - last_cmd_time > host.watchdog_timeout_ms / 1000) and not watchdog_active:
                 logger.warning(
@@ -164,17 +171,35 @@ def main():
                 watchdog_active = True
                 # Stop the mobile base (safety feature)
                 robot.xlerobot.stop_base()
+            step_times["watchdog_check"] = (time.perf_counter() - step_start) * 1000  # ms
             
-            # 3. Get observation and actionfrom Grievous (follower + cameras)
+            # 3. Get observation and action from Grievous (follower + leader + cameras)
+            step_start = time.perf_counter()
             last_observation = robot.get_observation()
+            step_times["get_observation"] = (time.perf_counter() - step_start) * 1000  # ms
+            
+            step_start = time.perf_counter()
             action = robot.get_action()
+            step_times["get_action"] = (time.perf_counter() - step_start) * 1000  # ms
+            
             # Action processors should be better understood, and potentially removed
+            step_start = time.perf_counter()
             teleop_action = teleop_action_processor((action, last_observation))
+            step_times["teleop_action_processor"] = (time.perf_counter() - step_start) * 1000  # ms
+            
+            step_start = time.perf_counter()
             robot_action = robot_action_processor((teleop_action, last_observation))
-            robot.send_action(action)
+            step_times["robot_action_processor"] = (time.perf_counter() - step_start) * 1000  # ms
+            
+            step_start = time.perf_counter()
+            robot.send_action(robot_action)
+            step_times["send_action"] = (time.perf_counter() - step_start) * 1000  # ms
             
             # 4. Encode camera images to base64 for network transmission
+            step_start = time.perf_counter()
+            encode_times = {}
             for cam_key in robot.xlerobot.cameras.keys():
+                cam_start = time.perf_counter()
                 if cam_key in last_observation:
                     # Check if image is valid (not None and not empty)
                     try:
@@ -195,9 +220,23 @@ def main():
                     except Exception as e:
                         logger.error(f"Failed to encode camera {cam_key}: {e}")
                         last_observation[cam_key] = ""
-                    
+                encode_times[cam_key] = (time.perf_counter() - cam_start) * 1000  # ms
+            step_times["encode_cameras"] = (time.perf_counter() - step_start) * 1000  # ms
+            step_times["encode_per_camera"] = encode_times
             
-            # 5. Send observation to remote client
+            # 5. Send processed robot_action to remote client via command socket
+            step_start = time.perf_counter()
+            try:
+                # Send processed action for client feedback
+                host.zmq_cmd_socket.send_string(json.dumps(robot_action), flags=zmq.NOBLOCK)
+            except zmq.Again:
+                logger.debug("Dropping action feedback, no client connected")
+            except Exception as e:
+                logger.error(f"Failed to send action feedback: {e}")
+            step_times["send_action_feedback"] = (time.perf_counter() - step_start) * 1000  # ms
+            
+            # 6. Send observation to remote client
+            step_start = time.perf_counter()
             try:
                 host.zmq_observation_socket.send_string(
                     json.dumps(last_observation), flags=zmq.NOBLOCK
@@ -206,11 +245,23 @@ def main():
                 logger.debug("Dropping observation, no client connected")
             except Exception as e:
                 logger.error(f"Failed to send observation: {e}")
+            step_times["send_observation"] = (time.perf_counter() - step_start) * 1000  # ms
             
-            # 6. Rate limiting
-            elapsed = time.time() - loop_start_time
+            # 7. Rate limiting
+            step_start = time.perf_counter()
+            elapsed = time.perf_counter() - loop_start_time
             sleep_time = max(1 / host.max_loop_freq_hz - elapsed, 0)
             time.sleep(sleep_time)
+            step_times["sleep"] = (time.perf_counter() - step_start) * 1000  # ms
+            
+            # Display timing information
+            total_loop_time = (time.perf_counter() - loop_start_time) * 1000  # ms
+            timing_parts = [f"{k}: {v:.2f}ms" for k, v in step_times.items() if k != "encode_per_camera"]
+            if "encode_per_camera" in step_times:
+                cam_timings = " | ".join([f"{cam}: {t:.2f}ms" for cam, t in step_times["encode_per_camera"].items()])
+                timing_parts.append(f"encode_cameras_detail: [{cam_timings}]")
+            timing_str = " | ".join(timing_parts)
+            print(f"Loop timing - Total: {total_loop_time:.2f}ms | {timing_str}")
             
             duration = time.perf_counter() - start
         
