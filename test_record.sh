@@ -15,8 +15,8 @@ lerobot-record \
     --teleop.port_zmq_cmd=5555 \
     --teleop.id=grievous_leader \
     --dataset.repo_id='InternetSandwich33/test_record' \
-    --dataset.num_episodes=1 \
-    --dataset.single_task="Your task description here" \
+    --dataset.num_episodes=10 \
+    --dataset.single_task="Test record" \
     --dataset.episode_time_s=10 \
     --dataset.reset_time_s=10 \
     --dataset.push_to_hub=true \
