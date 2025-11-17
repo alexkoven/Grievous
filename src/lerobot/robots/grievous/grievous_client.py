@@ -144,8 +144,8 @@ class GrievousClient(Robot):
 
     @cached_property
     def _state_ft(self) -> dict[str, type]:
-        """All state features: follower + leader."""
-        return {**self._follower_state_ft, **self._leader_state_ft}
+        """All state features: follower."""
+        return {**self._follower_state_ft}
 
     @cached_property
     def _state_order(self) -> tuple[str, ...]:
