@@ -144,12 +144,12 @@ class GrievousClient(Robot):
 
     @cached_property
     def _state_ft(self) -> dict[str, type]:
-        """All state features: follower."""
+        """All state features: follower only (leader excluded from observations)."""
         return {**self._follower_state_ft}
 
     @cached_property
     def _state_order(self) -> tuple[str, ...]:
-        """Ordered tuple of all state keys."""
+        """Ordered tuple of follower state keys only (leader excluded)."""
         return tuple(self._state_ft.keys())
 
     @cached_property
@@ -159,7 +159,7 @@ class GrievousClient(Robot):
 
     @cached_property
     def observation_features(self) -> dict[str, type | tuple]:
-        """Observation features: follower + leader + cameras."""
+        """Observation features: follower state + cameras (leader excluded)."""
         return {**self._state_ft, **self._cameras_ft}
 
     @cached_property
@@ -323,12 +323,14 @@ class GrievousClient(Robot):
         Returns:
             Tuple of (frames_dict, state_dict)
         """
-        # Extract state values (default to 0.0 if missing)
+        # Extract only follower state values (default to 0.0 if missing)
+        # Leader values are explicitly excluded from observations
         flat_state = {key: observation.get(key, 0.0) for key in self._state_order}
 
-        # Create state vector
+        # Create state vector with only follower state (no leader values)
         state_vec = np.array([flat_state[key] for key in self._state_order], dtype=np.float32)
 
+        # Only include follower state keys in obs_dict (filter out any leader keys from host)
         obs_dict: Dict[str, Any] = {**flat_state, "observation.state": state_vec}
 
         # Decode camera images

@@ -142,8 +142,31 @@ class GrievousLeader(Teleoperator):
             except Exception as e:
                 logger.error(f"Error receiving action via ZMQ: {e}")
 
-        # Add default values for head and base motors if not present
+        # Add default values for all required action keys if not present
         # These are required by grievous_client action_features but may not be in ZMQ message
+        # Standard SO-100/101 motor names
+        motor_names = [
+            "shoulder_pan",
+            "shoulder_lift",
+            "elbow_flex",
+            "wrist_flex",
+            "wrist_roll",
+            "gripper",
+        ]
+        
+        # Add defaults for left arm motors
+        for motor in motor_names:
+            key = f"left_arm_{motor}.pos"
+            if key not in action:
+                action[key] = 0.0
+        
+        # Add defaults for right arm motors
+        for motor in motor_names:
+            key = f"right_arm_{motor}.pos"
+            if key not in action:
+                action[key] = 0.0
+        
+        # Add defaults for head and base motors
         if "head_motor_1.pos" not in action:
             action["head_motor_1.pos"] = 0.0
         if "head_motor_2.pos" not in action:
