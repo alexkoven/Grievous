@@ -174,7 +174,6 @@ def main():
             step_times["watchdog_check"] = (time.perf_counter() - step_start) * 1000  # ms
             
             # 3. Get observation and action from Grievous (follower + leader + cameras)
-            #TODO(GRIEVOUS): Check if leader arm is still part of the observation. It should not be.
             step_start = time.perf_counter()
             last_observation = robot.get_observation()
             step_times["get_observation"] = (time.perf_counter() - step_start) * 1000  # ms

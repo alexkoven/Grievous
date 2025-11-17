@@ -86,8 +86,7 @@ class Grievous(Robot):
 
     @cached_property
     def observation_features(self) -> dict[str, type | tuple]:
-        """Observation features from XLerobot (arms, base, head, cameras) + leader arms.
-        #TODO(GRIEVOUS): Check if leader arm is still part of the observation. It should not be.
+        """Observation features from XLerobot (arms, base, head, cameras)
         Returns:
             Dictionary mapping feature names to types/shapes
         """
@@ -152,16 +151,11 @@ class Grievous(Robot):
         logger.info("Grievous configured successfully")
 
     def get_observation(self) -> dict[str, Any]:
-        """Get observation from XLerobot (arms, base, head, cameras) + leader arms.
-        #TODO(GRIEVOUS): Check if leader arm is still part of the observation. It should not be.
+        """Get observation from XLerobot (arms, base, head, cameras)
         Returns:
-            Dictionary with observation data including leader arm positions with _leader suffix
+            Dictionary with observation data
         """
         obs = self.xlerobot.get_observation()
-        # Add leader arm observations with _leader suffix
-        # leader_action = self.leader_arms.get_action()
-        # for key, value in leader_action.items():
-        #     obs[f"{key}_leader"] = value
         return obs
 
     def get_action(self) -> dict[str, Any]:
