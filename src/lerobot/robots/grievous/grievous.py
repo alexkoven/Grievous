@@ -87,7 +87,7 @@ class Grievous(Robot):
     @cached_property
     def observation_features(self) -> dict[str, type | tuple]:
         """Observation features from XLerobot (arms, base, head, cameras) + leader arms.
-        
+        #TODO(GRIEVOUS): Check if leader arm is still part of the observation. It should not be.
         Returns:
             Dictionary mapping feature names to types/shapes
         """
@@ -153,7 +153,7 @@ class Grievous(Robot):
 
     def get_observation(self) -> dict[str, Any]:
         """Get observation from XLerobot (arms, base, head, cameras) + leader arms.
-        
+        #TODO(GRIEVOUS): Check if leader arm is still part of the observation. It should not be.
         Returns:
             Dictionary with observation data including leader arm positions with _leader suffix
         """
@@ -165,7 +165,7 @@ class Grievous(Robot):
         return obs
 
     def get_action(self) -> dict[str, Any]:
-        """Get action from leader arms.
+        """Get action from leader arms. SO101 don't have get_action(), they only have send_action().
         
         Returns:
             Dictionary with action data including leader arm positions with _leader suffix

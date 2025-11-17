@@ -120,7 +120,8 @@ class GrievousLeader(Teleoperator):
         # Receive action via ZMQ if connected
         if self.zmq_cmd_socket:
             try:
-                action_dict = json.loads(self.zmq_cmd_socket.recv_string())
+                # Non-blocking receive with NOBLOCK flag - returns immediately if no data available
+                action_dict = json.loads(self.zmq_cmd_socket.recv_string(zmq.NOBLOCK))
                 # Map leader arm format (left_*, right_*) to follower arm format (left_arm_*, right_arm_*)
                 # to match what grievous_client expects
                 for key, value in action_dict.items():
@@ -136,7 +137,8 @@ class GrievousLeader(Teleoperator):
                         # Pass through other actions (head, base, etc.) unchanged
                         action[key] = value
             except zmq.Again:
-                logger.debug("ZMQ command socket busy, no action available")
+                # No data available - this is normal, just return default actions
+                logger.debug("No action available from ZMQ (non-blocking)")
             except Exception as e:
                 logger.error(f"Error receiving action via ZMQ: {e}")
 
