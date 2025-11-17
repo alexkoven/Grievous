@@ -121,7 +121,7 @@ class GrievousLeader(Teleoperator):
         if self.zmq_cmd_socket:
             try:
                 # Non-blocking receive with NOBLOCK flag - returns immediately if no data available
-                action_dict = json.loads(self.zmq_cmd_socket.recv_string(zmq.NOBLOCK))
+                action_dict = json.loads(self.zmq_cmd_socket.recv_string())
                 # Map leader arm format (left_*, right_*) to follower arm format (left_arm_*, right_arm_*)
                 # to match what grievous_client expects
                 for key, value in action_dict.items():
@@ -138,45 +138,9 @@ class GrievousLeader(Teleoperator):
                         action[key] = value
             except zmq.Again:
                 # No data available - this is normal, just return default actions
-                logger.debug("No action available from ZMQ (non-blocking)")
+                print("No action available from ZMQ (non-blocking)")
             except Exception as e:
                 logger.error(f"Error receiving action via ZMQ: {e}")
-
-        # Add default values for all required action keys if not present
-        # These are required by grievous_client action_features but may not be in ZMQ message
-        # Standard SO-100/101 motor names
-        motor_names = [
-            "shoulder_pan",
-            "shoulder_lift",
-            "elbow_flex",
-            "wrist_flex",
-            "wrist_roll",
-            "gripper",
-        ]
-        
-        # Add defaults for left arm motors
-        for motor in motor_names:
-            key = f"left_arm_{motor}.pos"
-            if key not in action:
-                action[key] = 0.0
-        
-        # Add defaults for right arm motors
-        for motor in motor_names:
-            key = f"right_arm_{motor}.pos"
-            if key not in action:
-                action[key] = 0.0
-        
-        # Add defaults for head and base motors
-        if "head_motor_1.pos" not in action:
-            action["head_motor_1.pos"] = 0.0
-        if "head_motor_2.pos" not in action:
-            action["head_motor_2.pos"] = 0.0
-        if "x.vel" not in action:
-            action["x.vel"] = 0.0
-        if "y.vel" not in action:
-            action["y.vel"] = 0.0
-        if "theta.vel" not in action:
-            action["theta.vel"] = 0.0
 
         return action
 
