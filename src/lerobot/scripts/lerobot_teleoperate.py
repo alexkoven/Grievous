@@ -71,6 +71,7 @@ from lerobot.robots import (  # noqa: F401
     Robot,
     RobotConfig,
     bi_so100_follower,
+    grievous,
     hope_jr,
     koch_follower,
     make_robot_from_config,
@@ -97,8 +98,8 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 @dataclass
 class TeleoperateConfig:
     # TODO: pepijn, steven: if more robots require multiple teleoperators (like lekiwi) its good to make this possibele in teleop.py and record.py with List[Teleoperator]
-    teleop: TeleoperatorConfig
     robot: RobotConfig
+    teleop: TeleoperatorConfig | None = None
     # Limit the maximum frames per second.
     fps: int = 60
     teleop_time_s: float | None = None
@@ -107,7 +108,7 @@ class TeleoperateConfig:
 
 
 def teleop_loop(
-    teleop: Teleoperator,
+    teleop: Teleoperator | None,
     robot: Robot,
     fps: int,
     teleop_action_processor: RobotProcessorPipeline[tuple[RobotAction, RobotObservation], RobotAction],
@@ -122,7 +123,8 @@ def teleop_loop(
     specified frequency until a set duration is reached or it is manually interrupted.
 
     Args:
-        teleop: The teleoperator device instance providing control actions.
+        teleop: The teleoperator device instance providing control actions. If None, extracts leader
+                actions from robot observations (for robots like Grievous with built-in leader arms).
         robot: The robot instance being controlled.
         fps: The target frequency for the control loop in frames per second.
         display_data: If True, fetches robot observations and displays them in the console and Rerun.
@@ -137,45 +139,78 @@ def teleop_loop(
 
     while True:
         loop_start = time.perf_counter()
+        step_times = {}
 
         # Get robot observation
         # Not really needed for now other than for visualization
         # teleop_action_processor can take None as an observation
         # given that it is the identity processor as default
+        step_start = time.perf_counter()
         obs = robot.get_observation()
+        step_times["get_observation"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Get teleop action
-        raw_action = teleop.get_action()
+        step_start = time.perf_counter()
+        if teleop is not None:
+            raw_action = teleop.get_action()
+        else:
+            # Extract leader actions from robot observations (for Grievous with built-in leader arms)
+            # Leader actions have _leader suffix, remove it to get action format
+            raw_action = {}
+            for key, value in obs.items():
+                if key.endswith("_leader") and isinstance(value, (int, float)):
+                    action_key = key[:-7]  # Remove "_leader" suffix
+                    raw_action[action_key] = value
+        step_times["get_teleop_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Process teleop action through pipeline
+        step_start = time.perf_counter()
         teleop_action = teleop_action_processor((raw_action, obs))
+        step_times["process_teleop_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Process action for robot through pipeline
+        step_start = time.perf_counter()
         robot_action_to_send = robot_action_processor((teleop_action, obs))
+        step_times["process_robot_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         # Send processed action to robot (robot_action_processor.to_output should return dict[str, Any])
+        step_start = time.perf_counter()
         _ = robot.send_action(robot_action_to_send)
+        step_times["send_action"] = (time.perf_counter() - step_start) * 1000  # ms
 
         if display_data:
             # Process robot observation through pipeline
+            step_start = time.perf_counter()
             obs_transition = robot_observation_processor(obs)
+            step_times["process_observation"] = (time.perf_counter() - step_start) * 1000  # ms
 
+            step_start = time.perf_counter()
             log_rerun_data(
                 observation=obs_transition,
                 action=teleop_action,
             )
+            step_times["log_rerun"] = (time.perf_counter() - step_start) * 1000  # ms
 
+            step_start = time.perf_counter()
             print("\n" + "-" * (display_len + 10))
             print(f"{'NAME':<{display_len}} | {'NORM':>7}")
             # Display the final robot action that was sent
             for motor, value in robot_action_to_send.items():
                 print(f"{motor:<{display_len}} | {value:>7.2f}")
             move_cursor_up(len(robot_action_to_send) + 5)
+            step_times["display"] = (time.perf_counter() - step_start) * 1000  # ms
 
+        step_start = time.perf_counter()
         dt_s = time.perf_counter() - loop_start
         busy_wait(1 / fps - dt_s)
+        step_times["busy_wait"] = (time.perf_counter() - step_start) * 1000  # ms
+
         loop_s = time.perf_counter() - loop_start
-        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+        # Display timing information
+        timing_str = " | ".join([f"{k}: {v:.2f}ms" for k, v in step_times.items()])
+        # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz) | {timing_str}")
+        # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+
 
         if duration is not None and time.perf_counter() - start >= duration:
             return
@@ -188,11 +223,12 @@ def teleoperate(cfg: TeleoperateConfig):
     if cfg.display_data:
         init_rerun(session_name="teleoperation")
 
-    teleop = make_teleoperator_from_config(cfg.teleop)
+    teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
     robot = make_robot_from_config(cfg.robot)
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    teleop.connect()
+    if teleop is not None:
+        teleop.connect()
     robot.connect()
 
     try:
@@ -211,7 +247,8 @@ def teleoperate(cfg: TeleoperateConfig):
     finally:
         if cfg.display_data:
             rr.rerun_shutdown()
-        teleop.disconnect()
+        if teleop is not None:
+            teleop.disconnect()
         robot.disconnect()
 
 

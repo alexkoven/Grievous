@@ -276,15 +276,29 @@ def main():
             "If not given, defaults to 1e-4."
         ),
     )
+    parser.add_argument(
+        "--video-backend",
+        type=str,
+        default=None,
+        choices=["torchcodec", "pyav", "video_reader"],
+        help=(
+            "Video backend to use for decoding videos. "
+            "Options: 'torchcodec' (default), 'pyav', or 'video_reader'. "
+            "Use 'pyav' if torchcodec fails to decode videos."
+        ),
+    )
 
     args = parser.parse_args()
     kwargs = vars(args)
     repo_id = kwargs.pop("repo_id")
     root = kwargs.pop("root")
     tolerance_s = kwargs.pop("tolerance_s")
+    video_backend = kwargs.pop("video_backend")
 
     logging.info("Loading dataset")
-    dataset = LeRobotDataset(repo_id, episodes=[args.episode_index], root=root, tolerance_s=tolerance_s)
+    dataset = LeRobotDataset(
+        repo_id, episodes=[args.episode_index], root=root, tolerance_s=tolerance_s, video_backend=video_backend
+    )
 
     visualize_dataset(dataset, **vars(args))
 

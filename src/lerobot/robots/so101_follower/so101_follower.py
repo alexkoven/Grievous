@@ -27,6 +27,7 @@ from lerobot.motors.feetech import (
 )
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
+from ..calibration_diagnostics import log_calibration_mismatch
 from ..robot import Robot
 from ..utils import ensure_safe_goal_position
 from .config_so101_follower import SO101FollowerConfig
@@ -92,9 +93,7 @@ class SO101Follower(Robot):
 
         self.bus.connect()
         if not self.is_calibrated and calibrate:
-            logger.info(
-                "Mismatch between calibration values in the motor and the calibration file or no calibration file found"
-            )
+            log_calibration_mismatch(self.id, self.calibration_fpath, self.calibration, self.bus)
             self.calibrate()
 
         for cam in self.cameras.values():
