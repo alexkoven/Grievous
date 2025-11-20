@@ -121,7 +121,7 @@ class GrievousClientConfig(RobotConfig):
     """
     
     # REQUIRED FIELDS FIRST (no defaults)
-    remote_ip: str = "192.168.50.148" # IP address of RPi5 - REQUIRED
+    remote_ip: str = "192.168.50.47" # IP address of RPi5 - REQUIRED
     
     # OPTIONAL FIELDS (with defaults)
     # ZMQ ports (must match host)
