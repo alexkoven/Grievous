@@ -54,19 +54,19 @@ class GrievousConfig(RobotConfig):
     Grievous = XLerobot (follower arms + base + head + cameras) + BiSO100Leader (leader arms)
     
     Port configuration (from laptop_host_setup.md):
-    - Follower left arm: /dev/ttyACM1
-    - Follower right arm: /dev/ttyACM2
-    - Leader left arm: /dev/ttyACM0
-    - Leader right arm: /dev/ttyACM3
+    - Follower left arm: /dev/follower_left
+    - Follower right arm: /dev/follower_right
+    - Leader left arm: /dev/leader_left
+    - Leader right arm: /dev/leader_right
     """
     
     # Follower arms ports (XLerobot pattern)
-    port1: str = "/dev/ttyACM1"  # Follower left arm
-    port2: str = "/dev/ttyACM2"  # Follower right arm
+    port1: str = "/dev/follower_left"  # Follower left arm
+    port2: str = "/dev/follower_right"  # Follower right arm
     
     # Leader arms ports
-    leader_left_arm_port: str = "/dev/ttyACM0"  # Leader left arm
-    leader_right_arm_port: str = "/dev/ttyACM3"  # Leader right arm
+    leader_left_arm_port: str = "/dev/leader_left"  # Leader left arm
+    leader_right_arm_port: str = "/dev/leader_right"  # Leader right arm
     
     # Motor settings
     disable_torque_on_disconnect: bool = True

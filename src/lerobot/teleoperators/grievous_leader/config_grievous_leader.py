@@ -25,11 +25,11 @@ class GrievousLeaderConfig(TeleoperatorConfig):
     """Configuration for Grievous leader arms teleoperator on laptop.
     
     Port configuration (from laptop_host_setup.md):
-    - Leader left arm: /dev/ttyACM0
-    - Leader right arm: /dev/ttyACM3
+    - Leader left arm: /dev/leader_left
+    - Leader right arm: /dev/leader_right
     """
-    left_arm_port: str = "/dev/ttyACM0"  # Leader left arm
-    right_arm_port: str = "/dev/ttyACM3"  # Leader right arm
+    left_arm_port: str = "/dev/leader_left"  # Leader left arm
+    right_arm_port: str = "/dev/leader_right"  # Leader right arm
     remote_ip: str = "192.168.50.148"
     port_zmq_cmd: int = 5555
 

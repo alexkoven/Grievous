@@ -35,10 +35,10 @@
 ### Device Paths
 
 **Motor Controllers (Identified):**
-- `/dev/ttyACM0` → Leader left arm
-- `/dev/ttyACM1` → Follower left arm
-- `/dev/ttyACM2` → Follower right arm
-- `/dev/ttyACM3` → Leader right arm
+- `/dev/leader_left` → Leader left arm
+- `/dev/follower_left` → Follower left arm
+- `/dev/follower_right` → Follower right arm
+- `/dev/leader_right` → Leader right arm
 
 **Cameras (To Be Identified):**
 - `/dev/video8` → Left wrist
