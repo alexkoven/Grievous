@@ -29,10 +29,10 @@ def grievous_cameras_config() -> dict[str, CameraConfig]:
     """Default camera configuration for Grievous (same as XLerobot)."""
     return {
         "left_wrist": OpenCVCameraConfig(
-            index_or_path="/dev/video6", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+            index_or_path="/dev/video8", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
         ),
         "right_wrist": OpenCVCameraConfig(
-            index_or_path="/dev/video8", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
+            index_or_path="/dev/video10", fps=30, width=640, height=480, rotation=Cv2Rotation.NO_ROTATION
         ),
         "head": RealSenseCameraConfig(
             serial_number_or_name="032622074046",
@@ -49,24 +49,24 @@ def grievous_cameras_config() -> dict[str, CameraConfig]:
 @RobotConfig.register_subclass("grievous")
 @dataclass
 class GrievousConfig(RobotConfig):
-    """Configuration for Grievous robot hardware on RPi5.
+    """Configuration for Grievous robot hardware on laptop.
     
     Grievous = XLerobot (follower arms + base + head + cameras) + BiSO100Leader (leader arms)
     
-    Default port configuration (from run_grievous.sh):
-    - Follower left arm + head: /dev/ttyACM0
-    - Follower right arm + base: /dev/ttyACM1
-    - Leader left arm: /dev/ttyACM2
+    Port configuration (from laptop_host_setup.md):
+    - Follower left arm: /dev/ttyACM1
+    - Follower right arm: /dev/ttyACM2
+    - Leader left arm: /dev/ttyACM0
     - Leader right arm: /dev/ttyACM3
     """
     
     # Follower arms ports (XLerobot pattern)
-    port1: str = "/dev/ttyACM0"  # Left follower arm + head motors
-    port2: str = "/dev/ttyACM1"  # Right follower arm + base motors
+    port1: str = "/dev/ttyACM1"  # Follower left arm
+    port2: str = "/dev/ttyACM2"  # Follower right arm
     
     # Leader arms ports
-    leader_left_arm_port: str = "/dev/ttyACM3"
-    leader_right_arm_port: str = "/dev/ttyACM2"
+    leader_left_arm_port: str = "/dev/ttyACM0"  # Leader left arm
+    leader_right_arm_port: str = "/dev/ttyACM3"  # Leader right arm
     
     # Motor settings
     disable_torque_on_disconnect: bool = True
