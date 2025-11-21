@@ -41,8 +41,8 @@
 - `/dev/leader_right` → Leader right arm
 
 **Cameras (To Be Identified):**
-- `/dev/video8` → Left wrist
-- `/dev/video10`  → Right wrist
+- `/dev/cam_left` → Left wrist
+- `/dev/cam_right`  → Right wrist
 - `032622074046` → Intellsense serial number
 
 ## Next Steps
