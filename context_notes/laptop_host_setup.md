@@ -40,7 +40,7 @@
 - `/dev/follower_right` → Follower right arm
 - `/dev/leader_right` → Leader right arm
 
-**Cameras (To Be Identified):**
+**Cameras (Identified):**
 - `/dev/cam_left` → Left wrist
 - `/dev/cam_right`  → Right wrist
 - `032622074046` → Intellsense serial number
@@ -50,4 +50,9 @@
 2. Run `lerobot_find_cameras.py` to identify camera indices
 3. Update `config_grievous.py` with identified port paths
 4. Free up disk space (only 17GB available)
+
+### Recording Controls
+- Right arrow -> finish current step
+- Left arrow -> redo episode
+- ESC -> end recording early, includes the episode where the recording was ended
 
