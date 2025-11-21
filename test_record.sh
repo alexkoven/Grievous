@@ -48,7 +48,7 @@
 # Configuration
 TASK="${TASK:-Test record}"
 REQUESTED_VERSION="${VERSION:-1}"
-EPISODES="${EPISODES:-50}"
+EPISODES="${EPISODES:-10}"
 EPISODE_TIME="${EPISODE_TIME:-120}"  # 2 min safety timeout (use → to end early)
 RESET_TIME="${RESET_TIME:-60}"       # 1 min reset window (use → to skip early)
 DATASET_NAME="${DATASET_NAME:-test-record}"
