@@ -51,3 +51,21 @@
 3. Update `config_grievous.py` with identified port paths
 4. Free up disk space (only 17GB available)
 
+## Udev Motor Rules
+SUBSYSTEM=="tty", ATTRS{serial}=="5A7A054921", SYMLINK+="follower_left"
+SUBSYSTEM=="tty", ATTRS{serial}=="5A68013127", SYMLINK+="leader_left"
+SUBSYSTEM=="tty", ATTRS{serial}=="5A7A054790", SYMLINK+="follower_right"
+SUBSYSTEM=="tty", ATTRS{serial}=="5A7A059375", SYMLINK+="leader_right"
+
+## Udev Camera rules 
+# Wrist Camera Left
+SUBSYSTEM=="video4linux", KERNEL=="video*", KERNELS=="1-3.1", ATTR{index}=="0", SYMLINK+="cam_left"
+
+# Wrist Camera Right
+SUBSYSTEM=="video4linux", KERNEL=="video*", KERNELS=="1-6", ATTR{index}=="0", SYMLINK+="cam_right"
+
+^ Had to correct the above versions by adding {index}=="0"
+
+## Add Grievous to Dialout
+`sudo usermod -a -G dialout grievous`
+
