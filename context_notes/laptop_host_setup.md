@@ -40,7 +40,7 @@
 - `/dev/follower_right` → Follower right arm
 - `/dev/leader_right` → Leader right arm
 
-**Cameras (To Be Identified):**
+**Cameras (Identified):**
 - `/dev/cam_left` → Left wrist
 - `/dev/cam_right`  → Right wrist
 - `032622074046` → Intellsense serial number
@@ -68,4 +68,9 @@ SUBSYSTEM=="video4linux", KERNEL=="video*", KERNELS=="1-6", ATTR{index}=="0", SY
 
 ## Add Grievous to Dialout
 `sudo usermod -a -G dialout grievous`
+
+## Recording Controls
+- Right arrow -> finish current step
+- Left arrow -> redo episode
+- ESC -> end recording early, includes the episode where the recording was ended
 
